@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drive All Night — Synthwave Mockup</title>
+<style>
+  :root { --bg:#07020f; --ink:#e9dcff; --dim:#9a86c4; --pink:#ff2bd6; --cyan:#3ef0ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui, sans-serif; }
+  main { max-width: 1300px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { margin:0 0 4px; font-size:20px; letter-spacing:.08em; color:var(--pink); text-shadow:0 0 8px #ff2bd6aa; }
+  p.sub { margin:0 0 14px; color:var(--dim); }
+  canvas { width:100%; height:auto; image-rendering:pixelated; image-rendering:crisp-edges; display:block;
+           border:1px solid #2a1550; box-shadow:0 0 40px #ff2bd622; }
+  .legend { display:flex; flex-wrap:wrap; gap:10px 18px; margin-top:14px; }
+  .sw { display:flex; align-items:center; gap:8px; color:var(--dim); }
+  .sw i { width:16px; height:16px; display:inline-block; border-radius:2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>DRIVE ALL NIGHT — driving screen mockup</h1>
+  <p class="sub">320×180 pixels scaled up. You're driving toward the sunset (top), collecting Particle X. A pirate is closing in from the right, and the moving city is on the left.</p>
+  <canvas id="c" width="320" height="180"></canvas>
+  <div class="legend">
+    <span class="sw"><i style="background:linear-gradient(#ffd23f,#ff5e6b,#a42aa8)"></i>Sunset line</span>
+    <span class="sw"><i style="background:#1b0a33;border:1px solid #3ef0ff55"></i>Night desert + grid</span>
+    <span class="sw"><i style="background:#7ffcff"></i>Particle X</span>
+    <span class="sw"><i style="background:#ff2bd6"></i>Your vehicle / city neon</span>
+    <span class="sw"><i style="background:#7dff3a"></i>Pirates</span>
+    <span class="sw"><i style="background:#bcd8ff"></i>Dawn (danger)</span>
+  </div>
+</main>
+<script>
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const W = 320, H = 180, PLAY = 164;
+const px = (x, y, c) => { g.fillStyle = c; g.fillRect(x|0, y|0, 1, 1); };
+const rect = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x|0, y|0, w|0, h|0); };
+function hash(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+
+// tiny 3x5 pixel font
+const F = {A:[2,5,7,5,5],B:[6,5,6,5,6],C:[3,4,4,4,3],D:[6,5,5,5,6],E:[7,4,6,4,7],F:[7,4,6,4,4],G:[3,4,5,5,3],H:[5,5,7,5,5],I:[7,2,2,2,7],K:[5,5,6,5,5],L:[4,4,4,4,7],M:[5,7,7,5,5],N:[6,5,5,5,5],O:[2,5,5,5,2],P:[6,5,6,4,4],R:[6,5,6,5,5],S:[3,4,2,1,6],T:[7,2,2,2,2],U:[5,5,5,5,7],V:[5,5,5,5,2],W:[5,5,7,7,5],X:[5,5,2,5,5],Y:[5,5,2,2,2],
+  '0':[7,5,5,5,7],'1':[2,6,2,2,7],'2':[6,1,2,4,7],'3':[6,1,2,1,6],'4':[5,5,7,1,1],'5':[7,4,6,1,6],'6':[3,4,7,5,7],'7':[7,1,2,2,2],'8':[7,5,7,5,7],'9':[7,5,7,1,6],
+  ':':[0,2,0,2,0],'.':[0,0,0,0,2],'/':[1,1,2,4,4],'-':[0,0,7,0,0],'>':[4,2,1,2,4],'<':[1,2,4,2,1],'!':[2,2,2,0,2],' ':[0,0,0,0,0]};
+function text(s, x, y, c, glow) {
+  for (const ch of s) { const r = F[ch] || F[' '];
+    for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++) if (r[j] & (4 >> i)) {
+      if (glow) { g.fillStyle = glow; g.fillRect(x + i - 0.5, y + j - 0.5, 2, 2); }
+      px(x + i, y + j, c); }
+    x += 4; }
+}
+
+const SUN = ['#fff1a8','#ffd23f','#ffb03a','#ff8a3d','#ff6a52','#ff4f6e','#ff3e8a','#f0309c','#d02ba6','#a42aa8','#7c23a2','#5a1c94'];
+
+function draw(t) {
+  const scroll = t * 0.012;               // world scrolls down as we drive "up"
+  const oy = Math.floor(scroll);
+
+  // ground
+  rect(0, 0, W, PLAY, '#1b0a33');
+  for (let y = 0; y < PLAY; y++) for (let x = 0; x < W; x += 1) {
+    const h = hash(x, y - oy);
+    if (h < 0.035) px(x, y, '#2a1150'); else if (h > 0.993) px(x, y, '#140726');
+  }
+
+  // dunes (rim-lit by the sunset)
+  for (let cy = -2; cy < 8; cy++) for (let cx = 0; cx < 6; cx++) {
+    const wy = cy - Math.floor(oy / 40), r = hash(cx * 7 + 3, wy * 13 + 1);
+    if (r > 0.45) continue;
+    const dx = cx * 56 + hash(cx, wy) * 40, dy = wy * 40 + oy + hash(wy, cx) * 20;
+    const rw = 12 + r * 30, rh = 4 + r * 8;
+    for (let j = -rh; j <= rh; j++) {
+      const hw = Math.floor(rw * Math.sqrt(1 - (j * j) / (rh * rh)));
+      const yy = Math.floor(dy + j); if (yy < 0 || yy >= PLAY) continue;
+      rect(dx - hw, yy, hw * 2, 1, j < -rh + 2 ? '#ff4fa3' : (j < -rh + 4 ? '#6a1f7a' : '#12062a'));
+    }
+  }
+
+  // neon grid, fading deeper into the night
+  for (let y = (oy % 20); y < PLAY; y += 20) { g.globalAlpha = 0.38 - 0.3 * (y / PLAY); rect(0, y, W, 1, '#3ef0ff'); }
+  for (let x = 6; x < W; x += 20) for (let y = 0; y < PLAY; y++) { g.globalAlpha = 0.38 - 0.3 * (y / PLAY); px(x, y, '#3ef0ff'); }
+  g.globalAlpha = 1;
+
+  // Particle X: richest near the sunset, thinning toward dawn; collected strip behind the car
+  for (let y = 0; y < PLAY; y += 4) for (let x = 0; x < W; x += 4) {
+    const wy = Math.floor((y - oy) / 4) , h = hash(x * 3 + 11, wy * 5 + 7);
+    const sy = y + ((oy % 4) + 4) % 4;
+    const dens = 0.42 * Math.pow(1 - sy / PLAY, 1.6) + 0.02;
+    if (h > dens) continue;
+    const ex = x + Math.floor(hash(x, wy) * 4);
+    if (Math.abs(ex - 160) < 7 && sy > 112) continue;          // already collected
+    if (ex < 60 && sy > 40 && sy < 160) continue;            // under the city
+    const tw = (Math.sin(t * 0.006 + h * 60) + 1) / 2;
+    const c = tw > 0.8 ? '#ffffff' : tw > 0.4 ? '#7ffcff' : '#36b6ff';
+    px(ex, sy, c);
+    if (h < dens * 0.18) { g.globalAlpha = 0.5; px(ex - 1, sy, c); px(ex + 1, sy, c); px(ex, sy - 1, c); px(ex, sy + 1, c); g.globalAlpha = 1; }
+  }
+
+  // sunset band with classic broken stripes
+  for (let y = 0; y < 30; y++) {
+    const i = Math.min(SUN.length - 1, Math.floor(y / 2.5));
+    const gap = y > 14 && (y % 4 < (y - 14) / 5);
+    if (gap) continue;
+    const shimmer = Math.sin(t * 0.003 + y) * 0.5;
+    rect(0, y + shimmer, W, 1, SUN[i]);
+  }
+  for (let y = 30; y < 80; y++) { g.globalAlpha = 0.22 * (1 - (y - 30) / 50); rect(0, y, W, 1, '#ff3e8a'); }
+  g.globalAlpha = 1;
+
+  // dawn hint at the bottom: cold, pale, dithered
+  for (let y = 136; y < PLAY; y++) for (let x = (y % 2); x < W; x += 2) {
+    g.globalAlpha = 0.14 * ((y - 136) / 28); px(x, y, '#bcd8ff');
+  }
+  g.globalAlpha = 1;
+
+  // moving city (left edge)
+  rect(0, 40, 54, 122, '#0c0618');
+  rect(54, 40, 1, 122, '#ff2bd6');
+  for (let y = 44; y < 158; y += 6) for (let x = 3; x < 50; x += 5) {
+    const h = hash(x, y);
+    if (h < 0.55) { const blink = hash(x, y + Math.floor(t / 900)) > 0.1;
+      px(x, y, blink ? (h < 0.2 ? '#ff2bd6' : h < 0.4 ? '#3ef0ff' : '#ffd23f') : '#2a1a40'); }
+  }
+  rect(10, 60, 18, 14, '#160b2a'); rect(10, 60, 18, 1, '#3ef0ff');
+  rect(30, 96, 20, 22, '#160b2a'); rect(30, 96, 20, 1, '#ff2bd6');
+  for (let y = 40; y < 162; y++) px(56, y, ((y + Math.floor(t / 80)) % 4 < 2) ? '#4a3a6a' : '#1e1430');  // treads
+  text('DOCK', 59, 120, '#ffd23f', '#ffd23f44');
+  text('<', 59, 128, (Math.floor(t / 400) % 2) ? '#ffd23f' : '#6a5a20');
+
+  // your vehicle
+  const cx = 156, cy = 112;
+  // headlight cone
+  for (let y = 0; y < 44; y++) { const w = 3 + y * 0.45; g.globalAlpha = 0.10 * (1 - y / 44) + 0.03; rect(cx + 4.5 - w, cy - y, w * 2, 1, '#ffe3f4'); }
+  g.globalAlpha = 1;
+  // taillight trail
+  for (let y = 0; y < 22; y++) { g.globalAlpha = 0.5 * (1 - y / 22); px(cx + 1, cy + 15 + y, '#ff2050'); px(cx + 7, cy + 15 + y, '#ff2050'); }
+  g.globalAlpha = 1;
+  rect(cx + 1, cy + 1, 9, 15, '#05010c');                       // shadow
+  rect(cx, cy, 9, 15, '#1a1030');
+  rect(cx, cy, 9, 1, '#ff2bd6'); rect(cx, cy + 14, 9, 1, '#ff2bd6');
+  rect(cx, cy, 1, 15, '#ff2bd6'); rect(cx + 8, cy, 1, 15, '#ff2bd6');
+  rect(cx + 2, cy + 3, 5, 3, '#3ef0ff'); rect(cx + 3, cy + 4, 3, 1, '#b8fbff');
+  rect(cx - 2, cy + 2, 2, 4, '#000'); rect(cx + 9, cy + 2, 2, 4, '#000');
+  rect(cx - 2, cy + 9, 2, 4, '#000'); rect(cx + 9, cy + 9, 2, 4, '#000');
+  px(cx - 2, cy + 3, '#3ef0ff'); px(cx + 10, cy + 3, '#3ef0ff'); px(cx - 2, cy + 10, '#3ef0ff'); px(cx + 10, cy + 10, '#3ef0ff');
+  px(cx + 1, cy, '#fff7c0'); px(cx + 7, cy, '#fff7c0');          // headlights
+  px(cx + 1, cy + 14, '#ff2050'); px(cx + 7, cy + 14, '#ff2050');
+  // collector arms sweeping Particle X
+  const pulse = (Math.sin(t * 0.01) + 1) / 2;
+  rect(cx - 4, cy + 13, 17, 1, pulse > 0.5 ? '#7ffcff' : '#36b6ff');
+  g.globalAlpha = 0.3 * pulse; rect(cx - 5, cy + 12, 19, 3, '#7ffcff'); g.globalAlpha = 1;
+
+  // flying pirate (shadow on the ground shows it's airborne)
+  const pxp = 236 - (t * 0.004 % 40), pyp = 46 + Math.sin(t * 0.004) * 3;
+  g.globalAlpha = 0.5; rect(pxp + 7, pyp + 12, 12, 3, '#05010c'); g.globalAlpha = 1;
+  const ship = ['....#....','...###...','..#####..','.##@#@##.','#########','##.....##'];
+  ship.forEach((row, j) => [...row].forEach((ch, i) => {
+    if (ch === '#') px(pxp + i, pyp + j, (j === 0 || i === 0 || i === 8 || j === 5) ? '#7dff3a' : '#0d1f0d');
+    if (ch === '@') px(pxp + i, pyp + j, '#ff3030');
+  }));
+  for (let k = 1; k < 5; k++) { g.globalAlpha = 0.6 / k; px(pxp + 1, pyp + 5 + k, '#7dff3a'); px(pxp + 7, pyp + 5 + k, '#7dff3a'); }
+  g.globalAlpha = 1;
+  if (Math.floor(t / 300) % 2) text('!', pxp + 3, pyp - 8, '#7dff3a');
+
+  // HUD
+  rect(0, PLAY, W, H - PLAY, '#0a0414');
+  rect(0, PLAY, W, 1, '#ff2bd6');
+  const bar = (x, y, label, v, c) => {
+    text(label, x, y, c, c + '44');
+    const bx = x + label.length * 4 + 2;
+    for (let i = 0; i < 6; i++) rect(bx + i * 4, y, 3, 5, i < v ? c : '#2a1a40');
+  };
+  bar(4, PLAY + 6, 'FUEL', 4, '#ffd23f');
+  bar(68, PLAY + 6, 'CARGO', 5, '#7ffcff');
+  bar(136, PLAY + 6, 'HULL', 6, '#ff2bd6');
+  text('CR 1250', 200, PLAY + 6, '#e9dcff');
+  // strip map: dawn (left) ... sunset (right)
+  const sx = 236, sw = 80;
+  for (let i = 0; i < sw; i++) {
+    const f = i / sw;
+    px(sx + i, PLAY + 8, f < 0.12 ? '#bcd8ff' : f > 0.9 ? '#ff8a3d' : '#3a2560');
+  }
+  px(sx + 58, PLAY + 7, '#ffd23f'); px(sx + 58, PLAY + 9, '#ffd23f');   // city
+  rect(sx + 66, PLAY + 5, 1, 2, '#3ef0ff'); rect(sx + 65, PLAY + 4, 3, 1, '#3ef0ff'); // you
+  text('D', sx - 6, PLAY + 6, '#bcd8ff'); text('S', sx + sw + 1, PLAY + 6, '#ff8a3d');
+}
+
+function loop(t) { draw(t); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

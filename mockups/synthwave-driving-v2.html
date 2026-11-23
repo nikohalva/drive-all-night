@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drive All Night — Synthwave Mockup</title>
+<style>
+  :root { --bg:#07020f; --ink:#e9dcff; --dim:#9a86c4; --pink:#ff2bd6; --cyan:#3ef0ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui, sans-serif; }
+  main { max-width: 1300px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { margin:0 0 4px; font-size:20px; letter-spacing:.08em; color:var(--pink); text-shadow:0 0 8px #ff2bd6aa; }
+  p.sub { margin:0 0 14px; color:var(--dim); }
+  canvas { width:100%; height:auto; image-rendering:pixelated; image-rendering:crisp-edges; display:block;
+           border:1px solid #2a1550; box-shadow:0 0 40px #ff2bd622; }
+  .legend { display:flex; flex-wrap:wrap; gap:10px 18px; margin-top:14px; }
+  .sw { display:flex; align-items:center; gap:8px; color:var(--dim); }
+  .sw i { width:16px; height:16px; display:inline-block; border-radius:2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>DRIVE ALL NIGHT — driving screen mockup v2</h1>
+  <p class="sub">320×180 pixels scaled up. You're driving toward the sunset (top), collecting Particle X. A pirate is closing in from the right, and the moving city is on the left.</p>
+  <canvas id="c" width="320" height="180"></canvas>
+  <div class="legend">
+    <span class="sw"><i style="background:linear-gradient(#ffd23f,#ff5e6b,#a42aa8)"></i>Sunset line</span>
+    <span class="sw"><i style="background:#1b0a33;border:1px solid #3ef0ff55"></i>Night desert + grid</span>
+    <span class="sw"><i style="background:#7ffcff"></i>Particle X</span>
+    <span class="sw"><i style="background:#ff2bd6"></i>Your vehicle / city neon</span>
+    <span class="sw"><i style="background:#7dff3a"></i>Pirates</span>
+    <span class="sw"><i style="background:#bcd8ff"></i>Dawn (danger)</span>
+  </div>
+</main>
+<script>
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const W = 320, H = 180, PLAY = 164;
+const px = (x, y, c) => { g.fillStyle = c; g.fillRect(x|0, y|0, 1, 1); };
+const rect = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x|0, y|0, w|0, h|0); };
+function hash(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+
+// tiny 3x5 pixel font
+const F = {A:[2,5,7,5,5],B:[6,5,6,5,6],C:[3,4,4,4,3],D:[6,5,5,5,6],E:[7,4,6,4,7],F:[7,4,6,4,4],G:[3,4,5,5,3],H:[5,5,7,5,5],I:[7,2,2,2,7],K:[5,5,6,5,5],L:[4,4,4,4,7],M:[5,7,7,5,5],N:[6,5,5,5,5],O:[2,5,5,5,2],P:[6,5,6,4,4],R:[6,5,6,5,5],S:[3,4,2,1,6],T:[7,2,2,2,2],U:[5,5,5,5,7],V:[5,5,5,5,2],W:[5,5,7,7,5],X:[5,5,2,5,5],Y:[5,5,2,2,2],
+  '0':[7,5,5,5,7],'1':[2,6,2,2,7],'2':[6,1,2,4,7],'3':[6,1,2,1,6],'4':[5,5,7,1,1],'5':[7,4,6,1,6],'6':[3,4,7,5,7],'7':[7,1,2,2,2],'8':[7,5,7,5,7],'9':[7,5,7,1,6],
+  ':':[0,2,0,2,0],'.':[0,0,0,0,2],'/':[1,1,2,4,4],'-':[0,0,7,0,0],'>':[4,2,1,2,4],'<':[1,2,4,2,1],'!':[2,2,2,0,2],' ':[0,0,0,0,0]};
+function text(s, x, y, c, glow) {
+  for (const ch of s) { const r = F[ch] || F[' '];
+    for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++) if (r[j] & (4 >> i)) {
+      if (glow) { g.fillStyle = glow; g.fillRect(x + i - 0.5, y + j - 0.5, 2, 2); }
+      px(x + i, y + j, c); }
+    x += 4; }
+}
+
+const SUN = ['#fff1a8','#ffd23f','#ffb03a','#ff8a3d','#ff6a52','#ff4f6e','#ff3e8a','#f0309c','#d02ba6','#a42aa8','#7c23a2','#5a1c94'];
+
+function draw(t) {
+  const scroll = t * 0.012;               // world scrolls down as we drive "up"
+  const oy = Math.floor(scroll);
+
+  // ground
+  rect(0, 0, W, PLAY, '#1b0a33');
+  for (let y = 0; y < PLAY; y++) for (let x = 0; x < W; x += 1) {
+    const h = hash(x, y - oy);
+    if (h < 0.035) px(x, y, '#2a1150'); else if (h > 0.993) px(x, y, '#140726');
+  }
+
+  // dunes (rim-lit by the sunset)
+  for (let cy = -2; cy < 8; cy++) for (let cx = 0; cx < 6; cx++) {
+    const wy = cy - Math.floor(oy / 40), r = hash(cx * 7 + 3, wy * 13 + 1);
+    if (r > 0.45) continue;
+    const dx = cx * 56 + hash(cx, wy) * 40, dy = wy * 40 + oy + hash(wy, cx) * 20;
+    const rw = 12 + r * 30, rh = 4 + r * 8;
+    for (let j = -rh; j <= rh; j++) {
+      const hw = Math.floor(rw * Math.sqrt(1 - (j * j) / (rh * rh)));
+      const yy = Math.floor(dy + j); if (yy < 0 || yy >= PLAY) continue;
+      rect(dx - hw, yy, hw * 2, 1, j < -rh + 2 ? '#ff4fa3' : (j < -rh + 4 ? '#6a1f7a' : '#12062a'));
+    }
+  }
+
+  // neon grid, fading deeper into the night
+  for (let y = (oy % 20); y < PLAY; y += 20) { g.globalAlpha = 0.38 - 0.3 * (y / PLAY); rect(0, y, W, 1, '#3ef0ff'); }
+  for (let x = 6; x < W; x += 20) for (let y = 0; y < PLAY; y++) { g.globalAlpha = 0.38 - 0.3 * (y / PLAY); px(x, y, '#3ef0ff'); }
+  g.globalAlpha = 1;
+
+  // Particle X: richest near the sunset, thinning toward dawn; collected strip behind the car
+  for (let y = 0; y < PLAY; y += 4) for (let x = 0; x < W; x += 4) {
+    const wy = Math.floor((y - oy) / 4) , h = hash(x * 3 + 11, wy * 5 + 7);
+    const sy = y + ((oy % 4) + 4) % 4;
+    const dens = 0.42 * Math.pow(1 - sy / PLAY, 1.6) + 0.02;
+    if (h > dens) continue;
+    const ex = x + Math.floor(hash(x, wy) * 4);
+    if (Math.abs(ex - 160) < 17 && sy > 112) continue;          // already collected
+    if (ex < 62 && sy > 30 && sy < 160) continue;            // under the city
+    const tw = (Math.sin(t * 0.006 + h * 60) + 1) / 2;
+    const c = tw > 0.8 ? '#ffffff' : tw > 0.4 ? '#7ffcff' : '#36b6ff';
+    px(ex, sy, c);
+    if (h < dens * 0.18) { g.globalAlpha = 0.5; px(ex - 1, sy, c); px(ex + 1, sy, c); px(ex, sy - 1, c); px(ex, sy + 1, c); g.globalAlpha = 1; }
+  }
+
+  // sunset band with classic broken stripes
+  for (let y = 0; y < 30; y++) {
+    const i = Math.min(SUN.length - 1, Math.floor(y / 2.5));
+    const gap = y > 14 && (y % 4 < (y - 14) / 5);
+    if (gap) continue;
+    const shimmer = Math.sin(t * 0.003 + y) * 0.5;
+    rect(0, y + shimmer, W, 1, SUN[i]);
+  }
+  for (let y = 30; y < 80; y++) { g.globalAlpha = 0.22 * (1 - (y - 30) / 50); rect(0, y, W, 1, '#ff3e8a'); }
+  g.globalAlpha = 1;
+
+  // dawn hint at the bottom: cold, pale, dithered
+  for (let y = 136; y < PLAY; y++) for (let x = (y % 2); x < W; x += 2) {
+    g.globalAlpha = 0.14 * ((y - 136) / 28); px(x, y, '#bcd8ff');
+  }
+  g.globalAlpha = 1;
+
+  const K = '#07030c';
+  const ph = oy;                                     // tread/wheel animation follows the ground
+  const bevel = (x, y, w, h, base, light, dark) => {
+    rect(x - 1, y - 1, w + 2, h + 2, K); rect(x, y, w, h, base);
+    rect(x, y, w, 1, light); rect(x, y, 1, h, light);
+    rect(x, y + h - 1, w, 1, dark); rect(x + w - 1, y + 1, 1, h - 1, dark);
+  };
+  const wheel = (x, y, w, h) => {
+    rect(x - 1, y - 1, w + 2, h + 2, K); rect(x, y, w, h, '#16121e');
+    for (let yy = 0; yy < h; yy++) if (((yy + ph) % 3 + 3) % 3 === 0) rect(x, y + yy, w, 1, '#4a4460');
+    rect(x + (w >> 1), y + 1, 1, h - 2, '#8a84a8');
+  };
+  const tread = (x, y, w, h) => {
+    rect(x - 1, y - 1, w + 2, h + 2, K); rect(x, y, w, h, '#1c1828');
+    for (let yy = 0; yy < h; yy++) if (((yy + ph) % 3 + 3) % 3 !== 2) rect(x + 1, y + yy, w - 2, 1, ((yy + ph) % 3 + 3) % 3 ? '#5a5474' : '#3a3550');
+    rect(x, y, 1, h, '#2a2440'); rect(x + w - 1, y, 1, h, '#0e0a16');
+  };
+  const circle = (cx, cy, r, c) => { for (let j = -r; j <= r; j++) { const hw = Math.floor(Math.sqrt(r * r - j * j)); rect(cx - hw, cy + j, hw * 2 + 1, 1, c); } };
+  const blink = (period, phase = 0) => Math.floor((t + phase) / period) % 2 === 0;
+
+  // ===== moving city (left edge) =====
+  rect(0, 34, 50, 132, K);
+  bevel(0, 36, 48, 128, '#2a2040', '#4e3c72', '#140c22');
+  // deck plating seams
+  for (let y = 44; y < 160; y += 12) rect(1, y, 46, 1, '#1e1630');
+  for (let x = 12; x < 48; x += 12) rect(x, 37, 1, 126, '#1e1630');
+  // ribbed tanks
+  bevel(4, 66, 14, 22, '#3e3458', '#6e5e96', '#1c1430');
+  for (let y = 68; y < 86; y += 3) rect(5, y, 12, 1, '#251c3a');
+  rect(9, 67, 2, 20, '#ff2bd6'); g.globalAlpha = .35; rect(8, 67, 4, 20, '#ff2bd6'); g.globalAlpha = 1;
+  bevel(26, 128, 16, 20, '#3e3458', '#6e5e96', '#1c1430');
+  for (let y = 130; y < 146; y += 3) rect(27, y, 14, 1, '#251c3a');
+  rect(32, 129, 3, 18, '#3ef0ff');
+  // glass domes
+  const dome = (x, y, r, tint, hi) => {
+    circle(x, y, r + 1, K); circle(x, y, r, '#1a1030'); circle(x, y, r - 1, tint);
+    circle(x - 2, y - 2, Math.max(1, r - 4), hi); px(x - r + 3, y - r + 3, '#ffffff'); px(x - r + 4, y - r + 3, '#ffffff');
+    for (let a = 0; a < 6; a++) { const ang = a / 6 * Math.PI * 2 + t * 0.0004; px(x + Math.cos(ang) * (r - 2), y + Math.sin(ang) * (r - 2), '#ffd23f'); }
+  };
+  dome(24, 50, 10, '#5a2a7a', '#b04ec0');
+  dome(14, 110, 8, '#1e4a6a', '#3ea8d0');
+  // lattice mast (seen from above) with blinking beacon
+  rect(30, 92, 12, 12, K);
+  for (let i = 0; i < 12; i++) { px(30 + i, 92 + i, '#8a84a8'); px(41 - i, 92 + i, '#8a84a8'); }
+  rect(30, 92, 12, 1, '#8a84a8'); rect(30, 103, 12, 1, '#8a84a8'); rect(30, 92, 1, 12, '#8a84a8'); rect(41, 92, 1, 12, '#8a84a8');
+  rect(35, 97, 2, 2, blink(500) ? '#ff3030' : '#501010');
+  // window strips
+  for (let y = 40; y < 162; y += 4) for (let x = 2; x < 46; x += 3) {
+    const h = hash(x, y);
+    if (h < 0.12) px(x, y, hash(x, y + Math.floor(t / 1200)) > 0.15 ? (h < .05 ? '#ff2bd6' : h < .09 ? '#3ef0ff' : '#ffd23f') : '#2a1a40');
+  }
+  rect(0, 36, 48, 1, '#ff2bd6');
+  // giant treads
+  tread(50, 30, 10, 136);
+  for (let y = 40; y < 166; y += 28) { circle(55, y, 3, K); circle(55, y, 2, '#6a6488'); px(55, y, '#1c1828'); }
+  text('DOCK', 64, 120, '#ffd23f', '#ffd23f44');
+  text('<', 64, 128, blink(400) ? '#ffd23f' : '#6a5a20');
+
+  // ===== player rig: armored cab + tracked collector unit =====
+  const pulse = (Math.sin(t * 0.01) + 1) / 2;
+  // headlight cone
+  for (let y = 0; y < 46; y++) { const w = 6 + y * 0.5; g.globalAlpha = 0.10 * (1 - y / 46) + 0.03; rect(160 - w, 92 - y, w * 2, 1, '#ffe3f4'); }
+  g.globalAlpha = 1;
+  // ground shadow
+  g.globalAlpha = 0.6; rect(149, 98, 30, 50, '#05010c'); g.globalAlpha = 1;
+  // collector unit (rear)
+  tread(144, 117, 5, 25); tread(171, 117, 5, 25);
+  bevel(150, 117, 20, 25, '#d8452e', '#ff7a4a', '#7e1e30');
+  rect(150, 121, 1, 18, '#a8303a'); rect(169, 121, 1, 18, '#a8303a');
+  for (let y = 121; y < 139; y += 4) { px(151, y, '#ffb07a'); px(168, y, '#ffb07a'); }   // rivets
+  // ribbed Particle X tank with a gauge window
+  bevel(153, 124, 14, 14, '#4a4466', '#8a84aa', '#252134');
+  for (let y = 126; y < 137; y += 3) rect(154, y, 12, 1, '#2c2840');
+  rect(158, 125, 4, 12, '#0c2a3a'); rect(158, 129, 4, 8, '#3ef0ff'); rect(158, 129, 4, 1, pulse > .5 ? '#ffffff' : '#b8fbff');
+  // turret
+  bevel(156, 118, 8, 5, '#3a3550', '#6a6488', '#1c1828');
+  // rear: neon strip, taillights, collector intake bar
+  rect(151, 140, 18, 1, '#ff2bd6');
+  rect(150, 141, 3, 1, '#ff2050'); rect(167, 141, 3, 1, '#ff2050');
+  for (let y = 0; y < 18; y++) { g.globalAlpha = 0.45 * (1 - y / 18); px(151, 144 + y, '#ff2050'); px(168, 144 + y, '#ff2050'); }
+  g.globalAlpha = 1;
+  rect(142, 143, 36, 3, K); rect(143, 144, 34, 1, pulse > .5 ? '#7ffcff' : '#36b6ff');
+  g.globalAlpha = 0.3 * pulse; rect(141, 142, 38, 5, '#7ffcff'); g.globalAlpha = 1;
+  // coupler
+  bevel(157, 113, 6, 4, '#3a3550', '#6a6488', '#1c1828');
+  // cab wheels
+  wheel(147, 97, 4, 7); wheel(169, 97, 4, 7); wheel(147, 106, 4, 7); wheel(169, 106, 4, 7);
+  // cab body
+  bevel(152, 95, 16, 18, '#ff6a2a', '#ffa45c', '#a8303a');
+  // hazard stripes along the cab flanks
+  for (let y = 100; y < 112; y++) { const c = (y >> 1) % 2 ? '#ffd23f' : K; px(152, y, c); px(167, y, c); }
+  // front bumper + headlights
+  bevel(151, 93, 18, 2, '#3a3550', '#6a6488', '#1c1828');
+  rect(152, 93, 2, 1, '#fff3b0'); rect(166, 93, 2, 1, '#fff3b0');
+  // grille vents on the hood
+  for (let i = 0; i < 5; i++) rect(155 + i * 2, 96, 1, 3, '#a8303a');
+  // windshield
+  rect(153, 99, 14, 6, K); rect(154, 100, 12, 4, '#2bb8d8'); rect(154, 100, 12, 1, '#3ef0ff');
+  px(155, 101, '#c8fdff'); px(156, 101, '#c8fdff'); px(155, 102, '#c8fdff');
+  // roof plate, rivets, amber lamp bar
+  bevel(154, 106, 12, 6, '#3a3550', '#6a6488', '#1c1828');
+  px(155, 107, '#8a84a8'); px(164, 107, '#8a84a8'); px(155, 110, '#8a84a8'); px(164, 110, '#8a84a8');
+  rect(157, 108, 6, 1, blink(350) ? '#ffd23f' : '#6a4a10');
+  // turret barrel reaching over the cab roof
+  rect(159, 104, 2, 15, K); rect(159, 105, 1, 13, '#6a6488'); rect(160, 105, 1, 13, '#2c2840');
+  // pink underglow
+  g.globalAlpha = 0.35; rect(146, 113, 28, 2, '#ff2bd6'); g.globalAlpha = 1;
+
+  // ===== pirate gunship (nose pointing at you, shadow shows it's airborne) =====
+  const gx = Math.round(226 - (t * 0.004 % 40)), gy = Math.round(36 + Math.sin(t * 0.004) * 3);
+  g.globalAlpha = 0.5; rect(gx + 6, gy + 18, 16, 6, '#05010c'); g.globalAlpha = 1;
+  // exhaust (behind = up)
+  for (let k = 1; k < 7; k++) { g.globalAlpha = 0.7 / k; rect(gx + 5, gy - k, 3, 1, '#7dff3a'); rect(gx + 16, gy - k, 3, 1, '#7dff3a'); } g.globalAlpha = 1;
+  // wings
+  bevel(gx, gy + 6, 7, 6, '#34452a', '#5e7a44', '#141c10');
+  bevel(gx + 17, gy + 6, 7, 6, '#34452a', '#5e7a44', '#141c10');
+  px(gx, gy + 11, blink(250) ? '#7dff3a' : '#2a4a10'); px(gx + 23, gy + 11, blink(250, 125) ? '#7dff3a' : '#2a4a10');
+  // engine pods
+  bevel(gx + 5, gy, 3, 12, '#2a2a34', '#5a5a6a', '#121218');
+  bevel(gx + 16, gy, 3, 12, '#2a2a34', '#5a5a6a', '#121218');
+  // fuselage
+  bevel(gx + 8, gy + 1, 8, 15, '#3e5230', '#6a8a4c', '#18220f');
+  rect(gx + 8, gy + 5, 8, 1, '#7dff3a');
+  for (let i = 0; i < 3; i++) rect(gx + 9 + i * 2, gy + 2, 1, 2, '#18220f');
+  // cockpit
+  rect(gx + 9, gy + 9, 6, 4, K); rect(gx + 10, gy + 10, 4, 2, '#ff3030'); px(gx + 10, gy + 10, '#ffb0b0');
+  // nose cannons
+  rect(gx + 9, gy + 16, 2, 4, K); rect(gx + 13, gy + 16, 2, 4, K);
+  px(gx + 9, gy + 16, '#5a5a6a'); px(gx + 13, gy + 16, '#5a5a6a');
+  if (blink(300)) text('!', gx + 11, gy - 12, '#7dff3a', '#7dff3a44');
+
+  // HUD
+  rect(0, PLAY, W, H - PLAY, '#0a0414');
+  rect(0, PLAY, W, 1, '#ff2bd6');
+  const bar = (x, y, label, v, c) => {
+    text(label, x, y, c, c + '44');
+    const bx = x + label.length * 4 + 2;
+    for (let i = 0; i < 6; i++) rect(bx + i * 4, y, 3, 5, i < v ? c : '#2a1a40');
+  };
+  bar(4, PLAY + 6, 'FUEL', 4, '#ffd23f');
+  bar(68, PLAY + 6, 'CARGO', 5, '#7ffcff');
+  bar(136, PLAY + 6, 'HULL', 6, '#ff2bd6');
+  text('CR 1250', 200, PLAY + 6, '#e9dcff');
+  // strip map: dawn (left) ... sunset (right)
+  const sx = 236, sw = 80;
+  for (let i = 0; i < sw; i++) {
+    const f = i / sw;
+    px(sx + i, PLAY + 8, f < 0.12 ? '#bcd8ff' : f > 0.9 ? '#ff8a3d' : '#3a2560');
+  }
+  px(sx + 58, PLAY + 7, '#ffd23f'); px(sx + 58, PLAY + 9, '#ffd23f');   // city
+  rect(sx + 66, PLAY + 5, 1, 2, '#3ef0ff'); rect(sx + 65, PLAY + 4, 3, 1, '#3ef0ff'); // you
+  text('D', sx - 6, PLAY + 6, '#bcd8ff'); text('S', sx + sw + 1, PLAY + 6, '#ff8a3d');
+}
+
+function loop(t) { draw(t); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
