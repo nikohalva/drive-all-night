@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { BattleScene } from './scenes/BattleScene';
+import { CityScene } from './scenes/CityScene';
 import { DriveScene } from './scenes/DriveScene';
 import { GalleryScene } from './scenes/GalleryScene';
 import { HudScene } from './scenes/HudScene';
+import { VictoryScene } from './scenes/VictoryScene';
 
 export const GAME_W = 480;
 export const GAME_H = 270;
@@ -17,7 +19,7 @@ const game = new Phaser.Game({
   roundPixels: true,
   backgroundColor: '#07020f',
   scale: { mode: Phaser.Scale.NONE, zoom: 1 },
-  scene: [BootScene, GalleryScene, DriveScene, HudScene, BattleScene],
+  scene: [BootScene, GalleryScene, DriveScene, HudScene, BattleScene, CityScene, VictoryScene],
 });
 
 // Handy for poking at the game from the browser console while developing.

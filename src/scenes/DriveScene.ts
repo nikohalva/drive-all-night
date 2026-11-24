@@ -89,6 +89,8 @@ export class DriveScene extends Phaser.Scene {
     this.grace = new Grace();
     this.events.off('battle-done');
     this.events.on('battle-done', this.onBattleDone, this);
+    this.events.off('city-done');
+    this.events.on('city-done', this.onCityDone, this);
 
     const kb = this.input.keyboard;
     if (!kb) throw new Error('keyboard input is required');
@@ -163,6 +165,9 @@ export class DriveScene extends Phaser.Scene {
     ui.fuelHint = vehicle.fuel < stats.tankCap * 0.3 && vehicle.cargo > 0;
     if (zone === 'dawn' && !this.frozen) this.handleDestroyed('dawn');
 
+    const dockPressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
+    if (dockPressed && ui.nearDock && !this.frozen && !this.destroyedPending) this.enterCity();
+
     this.grace.tick(dt);
     if (!this.frozen) {
       const contact = this.pirates.update(dt, time, { x: nk.x, y: nk.y }, {
@@ -227,6 +232,22 @@ export class DriveScene extends Phaser.Scene {
     this.frozen = true;
     this.k = { ...this.k, vx: 0, vy: 0 };
     this.scene.launch('battle', { enemies: group.pirates });
+  }
+
+  /** Dock with the city: freeze the world and open the city menu (which autosaves). */
+  private enterCity(): void {
+    this.frozen = true;
+    this.k = { ...this.k, vx: 0, vy: 0 };
+    this.pirates.clear();
+    this.scene.launch('city');
+  }
+
+  /** Back from the city: the menu has placed the rig beside the dock. */
+  private onCityDone(): void {
+    const p = getState().player;
+    this.k = { x: p.x, y: p.y, heading: p.heading, vx: 0, vy: 0 };
+    this.grace.start();
+    this.frozen = false;
   }
 
   /** The fight is over; give the player breathing room before the next pirates. */
