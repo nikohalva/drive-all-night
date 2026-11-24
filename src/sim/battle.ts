@@ -29,6 +29,8 @@ export interface Unit {
   heal: number;
   escortId?: number;
   level?: number;
+  /** An allied clan rider: fights for you on auto orders. */
+  ally?: boolean;
 }
 
 export type OrderType = 'fire' | 'guard' | 'repair' | 'spot' | 'brace' | 'move' | 'kit' | 'flee';
@@ -51,6 +53,8 @@ export interface BattleState {
   fleeBonus: number;
   log: string[];
   outcome: 'ongoing' | 'won' | 'lost' | 'fled';
+  /** Cargo ripped away by harpoon hits during the fight. */
+  stolenCargo: number;
 }
 
 const MAX_LOG = 30;
@@ -60,7 +64,7 @@ const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.m
 export const isAlive = (u: Unit): boolean => u.hp > 0;
 export const living = (b: BattleState, side: Side): Unit[] => b.units.filter((u) => u.side === side && isAlive(u));
 
-export function startBattle(s: GameState, enemies: Pirate[]): BattleState {
+export function startBattle(s: GameState, enemies: Pirate[], allies: Pirate[] = []): BattleState {
   const stats = vehicleStats(s.vehicle);
   const units: Unit[] = [
     {
@@ -97,6 +101,24 @@ export function startBattle(s: GameState, enemies: Pirate[]): BattleState {
       escortId: e.id,
     });
   }
+  allies.forEach((p, i) =>
+    units.push({
+      uid: `ally-${i}`,
+      side: 'player',
+      name: p.name,
+      role: p.role,
+      row: p.row,
+      hp: p.hp,
+      maxHp: p.maxHp,
+      armor: p.armor,
+      speed: p.speed,
+      guns: [{ name: p.name, damage: p.damage, accuracy: p.accuracy }],
+      longRange: p.longRange,
+      heal: 0,
+      level: p.level,
+      ally: true,
+    }),
+  );
   enemies.forEach((p, i) =>
     units.push({
       uid: `enemy-${i}`,
@@ -121,6 +143,7 @@ export function startBattle(s: GameState, enemies: Pirate[]): BattleState {
     fleeBonus: caravanStats(s).fleeBonus,
     log: ['Contact! Give your orders.'],
     outcome: 'ongoing',
+    stolenCargo: 0,
   };
 }
 
@@ -279,6 +302,10 @@ export function resolveRound(b: BattleState, orders: Record<string, Order>, rng:
       if (recipient !== target) dmg = Math.ceil(dmg / 2);
       if (bracing.has(recipient.uid)) dmg = Math.ceil(dmg / 2);
       recipient.hp = Math.max(0, recipient.hp - dmg);
+      if (e.role === 'harpoon') {
+        state.stolenCargo += 5;
+        log(`${e.name} rips away 5 cargo!`);
+      }
       log(
         recipient === target
           ? `${e.name} hits ${target.name} for ${dmg}.`
@@ -320,7 +347,12 @@ export function applyBattleResult(
     const u = b.units.find((x) => x.escortId === e.id);
     return u ? { ...e, hp: u.hp } : e;
   });
-  const vehicle = { ...s.vehicle, hp: leadUnit ? leadUnit.hp : s.vehicle.hp, repairKits: b.repairKits };
+  const vehicle = {
+    ...s.vehicle,
+    hp: leadUnit ? leadUnit.hp : s.vehicle.hp,
+    repairKits: b.repairKits,
+    cargo: Math.max(0, s.vehicle.cargo - (b.stolenCargo ?? 0)),
+  };
   const next: GameState = { ...s, caravan, vehicle };
   if (b.outcome === 'won') {
     const { v } = addCargo(vehicle, loot.cargo, caravanStats(next).cargoCap);

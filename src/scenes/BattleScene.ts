@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
 import { rigLayout } from '../art/painters';
-import { ensureEscortTextures, ensurePirateTexture, ensureRigTextures } from '../art/textures';
+import { ensureEnemyTexture, ensureEscortTextures, ensureRigTextures } from '../art/textures';
 import type { EscortKind } from '../config/escorts';
 import { VIEW } from '../config/view';
 import { getState, setState } from '../game/session';
@@ -46,6 +46,7 @@ const ORDER_LABEL: Record<OrderType, string> = {
 
 export interface BattleData {
   enemies: Pirate[];
+  allies?: Pirate[];
 }
 
 type Phase = 'order' | 'target' | 'resolving' | 'over';
@@ -53,6 +54,7 @@ type Phase = 'order' | 'target' | 'resolving' | 'over';
 /** Tactical turn-based fight: give every vehicle an order, then the round plays out. */
 export class BattleScene extends Phaser.Scene {
   private enemies0: Pirate[] = [];
+  private allies0: Pirate[] = [];
   private battle!: BattleState;
   private rng = makeRng(1);
   private orders: Record<string, Order> = {};
@@ -72,11 +74,12 @@ export class BattleScene extends Phaser.Scene {
 
   init(data: BattleData): void {
     this.enemies0 = data.enemies.map((e) => ({ ...e }));
+    this.allies0 = (data.allies ?? []).map((e) => ({ ...e }));
   }
 
   create(): void {
     this.rng = makeRng(randomSeed());
-    this.battle = startBattle(getState(), this.enemies0);
+    this.battle = startBattle(getState(), this.enemies0, this.allies0);
     this.orders = {};
     this.active = 0;
     this.menu = 0;
@@ -110,14 +113,16 @@ export class BattleScene extends Phaser.Scene {
       if (u.role === 'lead') {
         key = ensureRigTextures(this, s.vehicle)[0];
         scale = s.vehicle.hullId === 'scout' ? 2 : 1;
-      } else if (u.side === 'player') {
+      } else if (u.side === 'player' && !u.ally) {
         const e = s.caravan.find((x) => x.id === u.escortId);
         key = ensureEscortTextures(this, u.role as EscortKind, e?.tier ?? 1)[0];
       } else {
-        key = ensurePirateTexture(this, u.level ?? 1);
+        key = ensureEnemyTexture(this, u.role, u.level ?? 1);
       }
       // player sprites face up and enemy sprites face down; a quarter turn faces each at the other side
-      const img = this.add.image(0, 0, key).setScale(scale).setRotation(Math.PI / 2).setDepth(10);
+      const rotation = u.ally ? -Math.PI / 2 : Math.PI / 2;
+      const img = this.add.image(0, 0, key).setScale(scale).setRotation(rotation).setDepth(10);
+      if (u.ally) img.setTint(0x9fe8ff);
       if (u.role === 'lead') {
         const l = rigLayout(s.vehicle.hullId);
         img.setOrigin(l.pivotX / l.w, 0.5);
@@ -159,8 +164,9 @@ export class BattleScene extends Phaser.Scene {
     this.events.once('shutdown', () => kb.removeAllListeners());
   }
 
+  /** Your own vehicles waiting for orders (allied riders fight on their own). */
   private mine(): Unit[] {
-    return living(this.battle, 'player');
+    return living(this.battle, 'player').filter((u) => !u.ally);
   }
 
   private activeUnit(): Unit | undefined {
@@ -251,6 +257,8 @@ export class BattleScene extends Phaser.Scene {
 
   private resolve(): void {
     const before = this.battle;
+    const auto = autoOrders(before);
+    for (const u of living(before, 'player')) if (u.ally) this.orders[u.uid] = auto[u.uid];
     this.battle = resolveRound(before, this.orders, this.rng);
     this.feedback(before, this.battle);
     this.orders = {};
@@ -374,7 +382,7 @@ export class BattleScene extends Phaser.Scene {
       const alive = isAlive(u);
       const color = u.side === 'player' ? (u.role === 'lead' ? PAL.cyan : PAL.white) : PAL.pirate;
       const name = u.role === 'lead' ? 'YOU' : u.name;
-      this.text(ctx, name, p.x - textWidth(name) / 2, p.y + 18, alive ? color : '#4a3a5a');
+      this.text(ctx, name, p.x - textWidth(name) / 2, p.y + 18, alive ? (u.ally ? PAL.cyan : color) : '#4a3a5a');
       ctx.fillStyle = '#2a1a40';
       ctx.fillRect(p.x - 16, p.y + 25, 32, 3);
       ctx.fillStyle = u.side === 'player' ? PAL.pink : PAL.pirate;

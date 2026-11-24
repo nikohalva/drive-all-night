@@ -34,6 +34,13 @@ export interface UiInfo {
   fuelHint: boolean;
   /** A big centred message (for example "THE DAWN CAUGHT YOU"). */
   message: string | null;
+  /** Name of the baron whose open mine entrance the rig is at. */
+  nearMine: string | null;
+  /** At a mine entrance that is sealed for the day. */
+  mineSealed: boolean;
+  /** A short notice at the top of the screen, shown until `toastUntil` (game time, ms). */
+  toast: string | null;
+  toastUntil: number;
 }
 
-export const ui: UiInfo = { nearDock: false, dockName: null, scorching: false, broken: false, fuelHint: false, message: null };
+export const ui: UiInfo = { nearDock: false, dockName: null, scorching: false, broken: false, fuelHint: false, message: null, nearMine: null, mineSealed: false, toast: null, toastUntil: 0 };

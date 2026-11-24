@@ -15,6 +15,7 @@ import { buyEscort } from '../src/sim/caravan';
 import { buyHull } from '../src/sim/economy';
 import { newGame, type GameState } from '../src/sim/game-state';
 import { makePirateGroup, type Pirate } from '../src/sim/pirates';
+import { makeRobberGroup } from '../src/sim/raids';
 import { makeRng } from '../src/sim/rng';
 
 const hit = () => 0;
@@ -229,4 +230,26 @@ test('a full fight on auto stays short', () => {
     rounds += b.round;
   }
   expect(rounds / 50).toBeLessThan(10);
+});
+
+test('a harpoon hit rips away cargo, even if you win the fight', () => {
+  const s0 = newGame(1);
+  const s = { ...s0, vehicle: { ...s0.vehicle, cargo: 30 } };
+  const b = startBattle(s, makeRobberGroup(() => 0, 10, false));
+  const after = resolveRound(b, {}, hit);
+  expect(after.stolenCargo).toBe(5);
+  const r = applyBattleResult(s, { ...after, outcome: 'won' }, { credits: 0, cargo: 0 });
+  expect(r.vehicle.cargo).toBe(25);
+});
+
+test('allied clan riders fight on your side but are not yours to order', () => {
+  const s = newGame(1);
+  const riders = makePirateGroup(hit, 3, true).map((p) => ({ ...p, name: 'CLAN RIDER' }));
+  const b = startBattle(s, makePirateGroup(hit, 1, true), riders);
+  const ally = b.units.find((u) => u.ally);
+  expect(ally?.side).toBe('player');
+  expect(ally?.name).toBe('CLAN RIDER');
+  expect(autoOrders(b)[ally?.uid ?? '']?.type).toBe('fire');
+  const r = applyBattleResult(s, { ...b, outcome: 'won' }, { credits: 0, cargo: 0 });
+  expect(r.caravan).toEqual([]);
 });

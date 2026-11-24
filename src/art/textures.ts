@@ -6,6 +6,8 @@ import { PinnedLru } from './lru';
 import {
   makeCanvas,
   paintCity,
+  paintEnemy,
+  paintMine,
   paintEscort,
   paintGroundChunk,
   paintPirate,
@@ -31,6 +33,15 @@ export function ensureRigTextures(scene: Phaser.Scene, v: VehicleState): string[
 /** Texture keys for an escort's three tread phases. */
 export function ensureEscortTextures(scene: Phaser.Scene, kind: EscortKind, tier: Tier): string[] {
   return PHASES.map((phase) => addOnce(scene, `escort-${kind}-${tier}-${phase}`, () => paintEscort(kind, tier, phase)));
+}
+
+/** Texture for an enemy combatant by role (pirate, robber or baron clan) and level. */
+export function ensureEnemyTexture(scene: Phaser.Scene, role: string, level: number): string {
+  return addOnce(scene, `enemy-${role}-${level}`, () => paintEnemy(role, level));
+}
+
+export function ensureMineTexture(scene: Phaser.Scene, open: boolean): string {
+  return addOnce(scene, open ? 'mine-open' : 'mine-sealed', () => paintMine(open));
 }
 
 export function ensurePirateTexture(scene: Phaser.Scene, level: number): string {

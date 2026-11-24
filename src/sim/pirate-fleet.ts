@@ -1,6 +1,7 @@
 import { BALANCE } from '../config/balance';
 import { makePirateGroup, pirateLevel, spawnChancePerSecond, type Pirate } from './pirates';
 import type { Rng } from './rng';
+import type { Faction } from './raids';
 import type { Zone } from './world';
 
 export interface PirateGroup {
@@ -9,6 +10,10 @@ export interface PirateGroup {
   y: number;
   level: number;
   pirates: Pirate[];
+  /** Who they are; pirates fly, robbers and baron clans drive. */
+  faction?: Faction;
+  /** For baron war parties: the mine they come from. */
+  mineId?: string;
 }
 
 export interface FleetContext {
@@ -52,7 +57,7 @@ export function maybeSpawnGroup(
   const lo = BALANCE.EDGE + WALL_MARGIN;
   const hi = BALANCE.WORLD_WIDTH - BALANCE.EDGE - WALL_MARGIN;
   const x = Math.min(hi, Math.max(lo, player.x + (rng() * 2 - 1) * SPAWN_SPREAD));
-  return { id, x, y: player.y - SPAWN_DISTANCE, level, pirates };
+  return { id, x, y: player.y - SPAWN_DISTANCE, level, pirates, faction: 'pirates' };
 }
 
 export const groupSpeed = (g: PirateGroup): number =>

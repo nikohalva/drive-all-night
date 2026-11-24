@@ -12,7 +12,7 @@ export interface GameFlags {
 }
 
 export interface GameState {
-  version: 3;
+  version: 4;
   seed: number;
   /** World seconds (play time with the world clock running). */
   t: number;
@@ -26,13 +26,15 @@ export interface GameState {
   /** Escort vehicles following the lead rig. */
   caravan: Escort[];
   nextEscortId: number;
+  /** Standing with each night baron you have dealt with (mine id -> relation). */
+  barons: Record<string, { standing: number; allied: boolean }>;
 }
 
 /** A fresh game: dusk, beside the city on its dock side, facing the sunset. */
 export function newGame(seed: number): GameState {
   const city = cityPosition(0);
   return {
-    version: 3,
+    version: 4,
     seed,
     t: 0,
     player: { x: city.x + 40, y: city.y, heading: -Math.PI / 2 },
@@ -43,5 +45,6 @@ export function newGame(seed: number): GameState {
     known: [],
     caravan: [],
     nextEscortId: 1,
+    barons: {},
   };
 }

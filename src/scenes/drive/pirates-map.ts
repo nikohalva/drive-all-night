@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { PAL } from '../../art/palette';
-import { ensureLabel, ensurePirateTexture } from '../../art/textures';
+import { ensureEnemyTexture, ensureLabel, ensurePirateTexture } from '../../art/textures';
 import {
   inContact,
   isWarning,
@@ -10,10 +10,13 @@ import {
   type FleetContext,
   type PirateGroup,
 } from '../../sim/pirate-fleet';
+import { stepGroundGroup, type Faction } from '../../sim/raids';
 import type { Rng } from '../../sim/rng';
 
-/** Sideways spacing between pirates in one group, in pixels. */
+/** Sideways spacing between raiders in one group, in pixels. */
 const SPACING = 30;
+
+const WARN_COLOR: Record<Faction, string> = { pirates: PAL.pirate, robbers: '#ff8a3d', baron: '#c050ff' };
 
 interface Entry {
   group: PirateGroup;
@@ -22,7 +25,12 @@ interface Entry {
   warn: Phaser.GameObjects.Image;
 }
 
-/** Pirate groups flying over the map: spawning, chasing, and the sprites that show them. */
+const factionOf = (g: PirateGroup): Faction => g.faction ?? 'pirates';
+
+/**
+ * Raiders on the map: pirate gunships fly straight at you; robber gangs and baron war
+ * parties drive, so terrain gets in their way. Handles spawning pirates, chasing and sprites.
+ */
 export class PiratesMap {
   private entries: Entry[] = [];
   private rollTimer = 0;
@@ -37,16 +45,28 @@ export class PiratesMap {
     return this.entries.length;
   }
 
+  get groups(): PirateGroup[] {
+    return this.entries.map((e) => e.group);
+  }
+
+  claimId(): number {
+    return this.nextId++;
+  }
+
   add(group: PirateGroup): void {
-    const tex = ensurePirateTexture(this.scene, group.level);
+    const faction = factionOf(group);
     const sprites: Phaser.GameObjects.Image[] = [];
     const shadows: Phaser.GameObjects.Image[] = [];
-    for (let i = 0; i < group.pirates.length; i++) {
-      shadows.push(this.scene.add.image(0, 0, tex).setTintFill(0x05010c).setAlpha(0.5).setDepth(8));
-      sprites.push(this.scene.add.image(0, 0, tex).setDepth(12));
+    for (const p of group.pirates) {
+      const tex = faction === 'pirates' ? ensurePirateTexture(this.scene, group.level) : ensureEnemyTexture(this.scene, p.role, group.level);
+      if (faction === 'pirates') {
+        shadows.push(this.scene.add.image(0, 0, tex).setTintFill(0x05010c).setAlpha(0.5).setDepth(8));
+      }
+      sprites.push(this.scene.add.image(0, 0, tex).setDepth(faction === 'pirates' ? 12 : 9));
     }
+    const color = WARN_COLOR[faction];
     const warn = this.scene.add
-      .image(0, 0, ensureLabel(this.scene, '!', PAL.pirate, `${PAL.pirate}55`))
+      .image(0, 0, ensureLabel(this.scene, '!', color, `${color}55`))
       .setScale(3)
       .setDepth(13)
       .setVisible(false);
@@ -62,11 +82,12 @@ export class PiratesMap {
     timeMs: number,
     player: { x: number; y: number },
     ctx: FleetContext,
+    blocked: (x: number, y: number) => boolean,
   ): PirateGroup | null {
     this.rollTimer += dt;
     while (this.rollTimer >= 1) {
       this.rollTimer -= 1;
-      const spawned = maybeSpawnGroup(this.rng, this.entries.map((e) => e.group), player, ctx, this.nextId);
+      const spawned = maybeSpawnGroup(this.rng, this.groups, player, ctx, this.nextId);
       if (spawned) {
         this.nextId++;
         this.add(spawned);
@@ -75,7 +96,10 @@ export class PiratesMap {
 
     let contact: PirateGroup | null = null;
     for (const entry of [...this.entries]) {
-      entry.group = stepGroup(entry.group, player, dt);
+      entry.group =
+        factionOf(entry.group) === 'pirates'
+          ? stepGroup(entry.group, player, dt)
+          : stepGroundGroup(entry.group, player, dt, blocked);
       if (shouldGiveUp(entry.group, player)) {
         this.remove(entry);
       } else if (!contact && inContact(entry.group, player)) {
@@ -107,8 +131,10 @@ export class PiratesMap {
     entry.sprites.forEach((sprite, i) => {
       const x = group.x + (i - (n - 1) / 2) * SPACING;
       sprite.setPosition(x, group.y).setRotation(rotation);
-      entry.shadows[i].setPosition(x + 6, group.y + 10).setRotation(rotation);
+      entry.shadows[i]?.setPosition(x + 6, group.y + 10).setRotation(rotation);
     });
-    entry.warn.setPosition(group.x, group.y - 28).setVisible(isWarning(group, player) && Math.floor(timeMs / 300) % 2 === 0);
+    entry.warn
+      .setPosition(group.x, group.y - 28)
+      .setVisible(isWarning(group, player) && Math.floor(timeMs / 300) % 2 === 0);
   }
 }

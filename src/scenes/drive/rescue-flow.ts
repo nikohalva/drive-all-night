@@ -12,6 +12,8 @@ const RESULT_MS = 2400;
 export interface RescueHooks {
   freeze(frozen: boolean): void;
   destroyed(reason: DestroyReason): void;
+  /** True near a city, where robbers may answer a distress call. */
+  nearCity(): boolean;
 }
 
 /** A broken-down rig sends a distress call: wait, then see who answers. */
@@ -33,6 +35,7 @@ export class RescueFlow {
       zone,
       secondsUntilDawn(before.player.y, before.t),
       before.flags.firstRescueUsed,
+      this.hooks.nearCity(),
     );
 
     this.active = true;

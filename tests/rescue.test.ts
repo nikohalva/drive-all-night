@@ -139,3 +139,18 @@ test('the rescue crew brings enough fuel to get back toward the city, up to a fu
   const r = applyRescue({ ...at(30000), vehicle: { ...s0.vehicle, hp: 0, fuel: 0 } }, { type: 'rescued', waitSeconds: 30, fee: 0 });
   expect(r.vehicle.fuel).toBe(40);
 });
+
+test('near a city a distress call may bring robbers, and help costs double', () => {
+  const kinds = new Set(Array.from({ length: 300 }, (_, i) => rollRescue(makeRng(i), 'deep', 1e6, true, true).type));
+  expect(kinds.has('robbers')).toBe(true);
+  for (let i = 0; i < 100; i++) {
+    const o = rollRescue(makeRng(i), 'deep', 1e6, true, true);
+    if (o.type === 'rescued') expect(o.fee).toBe(RESCUE_TABLE.deep.fee * 2);
+  }
+  const s0 = newGame(1);
+  const robbed = applyRescue({ ...s0, vehicle: { ...s0.vehicle, cargo: 30 } }, { type: 'robbers', waitSeconds: 20 });
+  expect(robbed.vehicle.cargo).toBe(0);
+  expect(describeRescue({ type: 'robbers', waitSeconds: 20 }, s0, robbed)).toBe(
+    'DESERT ROBBERS ANSWERED YOUR CALL. THEY TOOK YOUR CARGO',
+  );
+});

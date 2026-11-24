@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CITY_DOCK_Y, CITY_H, CITY_W, rigLayout, rigSignature } from '../art/painters';
-import { ensureCityTexture, ensureEscortTextures, ensureRigTextures } from '../art/textures';
+import { ensureCityTexture, ensureEscortTextures, ensureMineTexture, ensureRigTextures } from '../art/textures';
 import { BALANCE } from '../config/balance';
 import { CITIES, CITY_BY_ID, type CityId } from '../config/cities';
 import {
@@ -26,12 +26,37 @@ import { TERRAIN_SPEED, isPassable, terrainAt } from '../sim/terrain';
 import { addCargo, burnFuel, isBroken, transferToTank, vehicleStats } from '../sim/vehicle';
 import {
   cityPositions,
+  nearestCity,
   heatDps,
   nearestCopy,
   scorchDepth,
   secondsUntilDawn,
   zoneAt,
 } from '../sim/world';
+import {
+  ALLY_HELP_RADIUS,
+  MINE_ENTRY_RADIUS,
+  MINE_HUNT_RADIUS,
+  adjustStanding,
+  discoverMines,
+  isMineOpen,
+  mineById,
+  mineSites,
+  nearestMine,
+  relation,
+  statusOf,
+} from '../sim/barons';
+import { groupCap, type PirateGroup as RaidGroup } from '../sim/pirate-fleet';
+import { pirateLevel } from '../sim/pirates';
+import {
+  baronChancePerSecond,
+  isCaravanWeak,
+  makeBaronParty,
+  makeClanRider,
+  makeRobberGroup,
+  robberChancePerSecond,
+} from '../sim/raids';
+import type { Rng } from '../sim/rng';
 import { GroundLayer } from './drive/ground';
 import { Lighting, RIG_SCREEN_X, RIG_SCREEN_Y } from './drive/lighting';
 import { ParticleLayer } from './drive/particles-layer';
@@ -75,6 +100,13 @@ export class DriveScene extends Phaser.Scene {
   private escortSprites = new Map<number, Phaser.GameObjects.Image>();
   /** Where each escort is on the road this frame (by escort id). */
   private escortSpots = new Map<number, { x: number; y: number; heading: number }>();
+  private mineSprites = new Map<string, Phaser.GameObjects.Image>();
+  /** The open mine whose entrance the rig is at, if any. */
+  private dockMine: string | null = null;
+  /** The raid currently being fought, so standings can change afterwards. */
+  private currentRaid: RaidGroup | null = null;
+  private raidTimer = 0;
+  private raidRng: Rng = makeRng(1);
 
   constructor() {
     super('drive');
@@ -108,17 +140,31 @@ export class DriveScene extends Phaser.Scene {
     this.convoy.reset(this.k.x, this.k.y);
     this.escortSprites = new Map();
     this.escortSpots = new Map();
+    this.mineSprites = new Map();
+    for (const m of mineSites(s.seed)) {
+      this.mineSprites.set(m.id, this.add.image(m.x, m.y, ensureMineTexture(this, true)).setDepth(3));
+    }
+    this.raidRng = makeRng(randomSeed());
+    this.raidTimer = 0;
+    this.currentRaid = null;
     this.lighting = new Lighting(this);
     this.pirates = new PiratesMap(this, makeRng(randomSeed()));
     this.grace = new Grace();
     this.rescue = new RescueFlow(this, makeRng(randomSeed()), {
       freeze: (frozen) => this.setFrozen(frozen),
       destroyed: (reason) => this.handleDestroyed(reason),
+      nearCity: () => {
+        const s = getState();
+        const c = nearestCity(s.player.x, s.player.y, s.t);
+        return Math.hypot(c.x - s.player.x, c.y - s.player.y) < 3000;
+      },
     });
     this.events.off('battle-done');
     this.events.on('battle-done', this.onBattleDone, this);
     this.events.off('city-done');
     this.events.on('city-done', this.onCityDone, this);
+    this.events.off('baron-done');
+    this.events.on('baron-done', this.onCityDone, this);
     this.events.off('map-done');
     this.events.on('map-done', () => {
       // the M press that closed the map also reaches this scene; don't let it reopen the map
@@ -197,6 +243,18 @@ export class DriveScene extends Phaser.Scene {
 
     setState({ ...prev, t: tNew, player: { x: nk.x, y: nk.y, heading: nk.heading }, vehicle });
 
+    // scouts widen how far the caravan sees; a mine is found once it comes into sight
+    const found = discoverMines(getState(), nk.x, nk.y, caravan.sight);
+    if (found.length > 0) {
+      const now = getState();
+      setState({ ...now, known: [...now.known, ...found] });
+      const m = mineById(now.seed, found[0]);
+      if (m) {
+        ui.toast = `FOUND A MINE: ${m.baron} OF THE ${m.clan}`;
+        ui.toastUntil = time + 5000;
+      }
+    }
+
     const zone = zoneAt(nk.y, tNew);
     const dock = cities.find((c) => Math.hypot(nk.x - c.x, nk.y - c.y) <= BALANCE.DOCK_RADIUS);
     this.dockCity = dock ? dock.id : null;
@@ -205,10 +263,18 @@ export class DriveScene extends Phaser.Scene {
     ui.scorching = zone === 'scorch';
     ui.broken = isBroken(vehicle);
     ui.fuelHint = vehicle.fuel < caravan.tankCap * 0.3 && vehicle.cargo > 0;
+    const near = nearestMine(prev, nk.x, nk.y);
+    const entrance = Math.hypot(near.mine.x - nk.x, nearestCopy(near.mine.y + 24, nk.y) - nk.y);
+    const atMine = entrance <= MINE_ENTRY_RADIUS && !ui.nearDock;
+    const mineOpen = atMine && isMineOpen(near.mine, tNew);
+    this.dockMine = mineOpen ? near.mine.id : null;
+    ui.nearMine = mineOpen ? near.mine.baron : null;
+    ui.mineSealed = atMine && !mineOpen;
     if (zone === 'dawn' && !this.frozen) this.handleDestroyed('dawn');
 
     const dockPressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
     if (dockPressed && ui.nearDock && !this.frozen && !this.destroyedPending) this.enterCity();
+    else if (dockPressed && this.dockMine && !this.frozen && !this.destroyedPending) this.enterMine();
     const mapPressed = Phaser.Input.Keyboard.JustDown(this.keys.M);
     if (mapPressed && !this.frozen && !this.destroyedPending && this.time.now >= this.mapReopenAt) this.openMap();
     const helpPressed = Phaser.Input.Keyboard.JustDown(this.keys.H);
@@ -218,6 +284,7 @@ export class DriveScene extends Phaser.Scene {
     // a rig with no hull left has nothing to fight with: pirates leave it to the rescue call
     const helpless = vehicle.hp <= 0;
     if (helpless) this.pirates.clear();
+    const groundBlocked = (x: number, y: number): boolean => !isPassable(terrainAt(prev.seed, x, y));
     if (!this.frozen) {
       const contact = this.pirates.update(dt, time, { x: nk.x, y: nk.y }, {
         zone,
@@ -226,8 +293,9 @@ export class DriveScene extends Phaser.Scene {
         easy: !prev.flags.easyStartOver,
         graceActive: this.grace.active,
         helpless,
-      });
+      }, groundBlocked);
       if (contact) this.startBattle(contact);
+      else if (!helpless && !this.grace.active) this.rollRaids(dt, zone, stats.strength, vehicle.cargo, !prev.flags.easyStartOver);
     }
 
     this.draw(time, dt, tNew, vehicle, zone, cities);
@@ -283,6 +351,7 @@ export class DriveScene extends Phaser.Scene {
     this.rig.setPosition(k.x, k.y).setRotation(k.heading + Math.PI / 2);
     for (const c of cities) this.cities.get(c.id)?.setPosition(c.x, c.y);
     this.drawEscorts(phase);
+    this.drawMines(t);
 
     const scrollX = Math.round(k.x - RIG_SCREEN_X);
     const scrollY = Math.round(k.y - RIG_SCREEN_Y);
@@ -302,11 +371,81 @@ export class DriveScene extends Phaser.Scene {
     });
   }
 
-  /** Pirates caught the rig: freeze the world and hand over to the turn-based fight. */
+  /** Once a second, maybe a robber gang or a hostile baron's war party comes for the caravan. */
+  private rollRaids(dt: number, zone: ReturnType<typeof zoneAt>, strength: number, cargo: number, easy: boolean): void {
+    this.raidTimer += dt;
+    if (this.raidTimer < 1) return;
+    this.raidTimer -= 1;
+    if (this.pirates.count >= groupCap(easy)) return;
+    const s = getState();
+    const p = s.player;
+    const city = nearestCity(p.x, p.y, s.t);
+    const robberChance = robberChancePerSecond(zone, Math.hypot(city.x - p.x, city.y - p.y), isCaravanWeak(s), easy);
+    const near = nearestMine(s, p.x, p.y);
+    const baronChance = near.dist < MINE_HUNT_RADIUS ? baronChancePerSecond(zone, statusOf(relation(s, near.mine)), near.dist) : 0;
+    const roll = this.raidRng();
+    let group: RaidGroup | null = null;
+    if (roll < robberChance) {
+      const level = pirateLevel(strength, cargo, easy);
+      group = { id: this.pirates.claimId(), x: 0, y: 0, level, pirates: makeRobberGroup(this.raidRng, level, easy), faction: 'robbers' };
+    } else if (roll < robberChance + baronChance) {
+      const level = pirateLevel(strength, 0, false) + 1;
+      group = {
+        id: this.pirates.claimId(),
+        x: 0,
+        y: 0,
+        level,
+        pirates: makeBaronParty(this.raidRng, level, near.mine.temper),
+        faction: 'baron',
+        mineId: near.mine.id,
+      };
+    }
+    if (!group) return;
+    // ground raiders need open ground to start from
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const a = this.raidRng() * Math.PI * 2;
+      const x = p.x + Math.cos(a) * 260;
+      const y = p.y + Math.sin(a) * 260;
+      if (isPassable(terrainAt(s.seed, x, y))) {
+        this.pirates.add({ ...group, x, y });
+        return;
+      }
+    }
+  }
+
+  /** Raiders caught the rig: freeze the world and hand over to the turn-based fight. */
   private startBattle(group: PirateGroup): void {
     this.frozen = true;
     this.k = { ...this.k, vx: 0, vy: 0 };
-    this.scene.launch('battle', { enemies: group.pirates });
+    this.currentRaid = group;
+    // allied clan riders sometimes ride to help near their mine
+    const s = getState();
+    const allied = mineSites(s.seed).find(
+      (m) => relation(s, m).allied && Math.hypot(m.x - s.player.x, nearestCopy(m.y, s.player.y) - s.player.y) < ALLY_HELP_RADIUS,
+    );
+    const allies = allied && this.raidRng() < 0.5 ? [makeClanRider(group.level)] : [];
+    this.scene.launch('battle', { enemies: group.pirates, allies });
+  }
+
+  /** Mines stay put while the night moves: draw the ones near the rig, lit while open. */
+  private drawMines(t: number): void {
+    const s = getState();
+    for (const m of mineSites(s.seed)) {
+      const img = this.mineSprites.get(m.id);
+      if (!img) continue;
+      const y = nearestCopy(m.y, s.player.y);
+      const near = Math.abs(y - s.player.y) < 1200;
+      img.setVisible(near);
+      if (near) img.setPosition(m.x, y).setTexture(ensureMineTexture(this, isMineOpen(m, t)));
+    }
+  }
+
+  /** Visit a night baron's hall; the clock stops while you are inside. */
+  private enterMine(): void {
+    this.frozen = true;
+    this.k = { ...this.k, vx: 0, vy: 0 };
+    this.pirates.clear();
+    this.scene.launch('baron', { mineId: this.dockMine });
   }
 
   /** Dock with the city: freeze the world and open the city menu (which autosaves). */
@@ -334,7 +473,22 @@ export class DriveScene extends Phaser.Scene {
   }
 
   /** The fight is over; give the player breathing room before the next pirates. */
-  private onBattleDone(): void {
+  private onBattleDone(outcome?: string): void {
+    const raid = this.currentRaid;
+    this.currentRaid = null;
+    if (raid && outcome === 'won') {
+      let s = getState();
+      if (raid.faction === 'baron' && raid.mineId) {
+        // beating a clan's war party costs you with that baron
+        s = adjustStanding(s, raid.mineId, -10);
+      } else {
+        // driving raiders off near a friendly mine wins its baron's favour
+        const near = nearestMine(s, s.player.x, s.player.y);
+        const status = statusOf(relation(s, near.mine));
+        if (near.dist < ALLY_HELP_RADIUS && (status === 'FRIENDLY' || status === 'ALLIED')) s = adjustStanding(s, near.mine.id, 3);
+      }
+      setState(s);
+    }
     this.pirates.clear();
     this.grace.start();
     this.frozen = false;

@@ -4,7 +4,7 @@ import { caravanStats } from './caravan';
 import type { GameState } from './game-state';
 import { vehicleStats, type VehicleState } from './vehicle';
 
-export type TxFailure = 'credits' | 'slot' | 'not-owned' | 'nothing' | 'required';
+export type TxFailure = 'credits' | 'slot' | 'not-owned' | 'nothing' | 'required' | 'refused';
 
 export type TxResult =
   | { ok: true; state: GameState }

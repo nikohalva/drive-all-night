@@ -5,6 +5,7 @@ import { NIGHT_LEN } from '../config/balance';
 import { CITIES, CITY_BY_ID } from '../config/cities';
 import { VIEW } from '../config/view';
 import { getState } from '../game/session';
+import { STANDING_COLOR, mineSites, relation, statusOf } from '../sim/barons';
 import { planetTimeLabel } from '../sim/clock';
 import { mapWindow, placeLabel, toMap, type MapArea, type MapWindow, type MapZoom } from '../sim/map';
 import { isPassable, terrainAt } from '../sim/terrain';
@@ -23,9 +24,6 @@ export interface MapMarker {
   color: string;
   shape: 'city' | 'mine';
 }
-
-/** Extra markers (mines) are supplied by whoever knows about them. */
-export const mapMarkerSources: Array<() => MapMarker[]> = [];
 
 /** Full-screen world map. M or Esc closes it; Z switches between local and whole-night zoom. */
 export class MapScene extends Phaser.Scene {
@@ -66,7 +64,16 @@ export class MapScene extends Phaser.Scene {
       color: CITY_BY_ID[c.id].color,
       shape: 'city' as const,
     }));
-    return [...cities, ...mapMarkerSources.flatMap((source) => source())];
+    const mines = mineSites(s.seed)
+      .filter((m) => s.known.includes(m.id))
+      .map((m) => ({
+        name: m.baron,
+        x: m.x,
+        y: m.y,
+        color: STANDING_COLOR[statusOf(relation(s, m))],
+        shape: 'mine' as const,
+      }));
+    return [...cities, ...mines];
   }
 
   private render(): void {
@@ -172,8 +179,11 @@ export class MapScene extends Phaser.Scene {
 
     const legendY = H - 40;
     drawText(ctx, 'CITY', x + 8, legendY, PAL.amber);
-    drawText(ctx, 'MINE', x + 48, legendY, PAL.pirate);
-    drawText(ctx, 'IMPASSABLE', x + 88, legendY, '#b07ad0');
+    drawText(ctx, 'MINE:', x + 48, legendY, '#c8b8e8');
+    (['HOSTILE', 'WARY', 'NEUTRAL', 'FRIENDLY', 'ALLIED'] as const).forEach((st, i) =>
+      drawText(ctx, st, x + 8 + i * 58, legendY - 12, STANDING_COLOR[st]),
+    );
+    drawText(ctx, 'IMPASSABLE', x + 100, legendY, '#b07ad0');
     drawText(ctx, `${CITIES.length} CITIES ROLL THROUGH THE NIGHT`, x, legendY + 14, '#6a5a8a');
   }
 }

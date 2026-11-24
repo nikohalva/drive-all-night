@@ -624,3 +624,117 @@ export function paintEscort(kind: EscortKind, tier: 1 | 2 | 3, phase: TreadPhase
   }
   return c;
 }
+
+// ------------------------------------------------------------- raiders, mines
+
+/** Desert robber rigs (drawn nose-down like the pirate gunships). */
+function paintRobber(role: 'buggy' | 'harpoon' | 'mortar', level: number): HTMLCanvasElement {
+  const [c, g] = makeCanvas(26, 26);
+  const cx = 13;
+  const body: Ramp = level >= 8 ? { base: '#6a2a1a', light: '#a0482a', dark: '#2a0e08' } : { base: '#8a4a2a', light: '#c07040', dark: '#3a1a10' };
+  for (const x of [cx - 10, cx + 7]) {
+    wheel(g, x, 5, 3, 6, 0);
+    wheel(g, x, 15, 3, 6, 0);
+  }
+  bevel(g, cx - 6, 4, 12, 17, body);
+  rect(g, cx - 4, 12, 8, 4, PAL.glass);
+  for (let x = cx - 6; x < cx + 6; x += 2) px(g, x, 22, '#d8d0e0'); // spikes on the ram bar
+  rect(g, cx - 6, 21, 2, 1, PAL.red);
+  rect(g, cx + 4, 21, 2, 1, PAL.red);
+  if (role === 'harpoon') {
+    rect(g, cx - 1, 6, 2, 19, K);
+    rect(g, cx - 1, 7, 1, 17, PAL.steel.light);
+    rect(g, cx - 2, 24, 4, 1, '#d8d0e0');
+  } else if (role === 'mortar') {
+    circle(g, cx, 8, 4, K);
+    circle(g, cx, 8, 3, PAL.steel.base);
+    circle(g, cx, 8, 1, K);
+  } else {
+    rect(g, cx - 3, 6, 6, 3, body.dark);
+  }
+  return c;
+}
+
+/** Night baron clan machines: dark violet with lantern-purple lights. */
+function paintBaronUnit(role: 'crawler' | 'shade' | 'champion', level: number): HTMLCanvasElement {
+  const big = role === 'champion';
+  const [c, g] = makeCanvas(big ? 32 : 26, big ? 32 : 26);
+  const cx = big ? 16 : 13;
+  const body: Ramp = { base: '#2a1a3a', light: '#5a3a7a', dark: '#100818' };
+  const lamp = '#c050ff';
+  if (role === 'shade') {
+    bevel(g, cx - 4, 3, 8, 19, body);
+    bevel(g, cx - 10, 9, 6, 6, body);
+    bevel(g, cx + 4, 9, 6, 6, body);
+    rect(g, cx - 1, 6, 2, 12, lamp);
+    g.globalAlpha = 0.4;
+    rect(g, cx - 3, 4, 6, 18, lamp);
+    g.globalAlpha = 1;
+    return c;
+  }
+  const w = big ? 18 : 14;
+  const h = big ? 24 : 18;
+  tread(g, cx - w / 2 - 5, 4, 4, h, 0);
+  tread(g, cx + w / 2 + 1, 4, 4, h, 0);
+  bevel(g, cx - w / 2, 4, w, h, body);
+  for (let y = 8; y < 4 + h - 2; y += 4) rect(g, cx - w / 2 + 2, y, w - 4, 1, body.dark);
+  px(g, cx - 3, 4 + h - 3, lamp);
+  px(g, cx + 2, 4 + h - 3, lamp);
+  rect(g, cx - 1, 6, 2, 4, lamp);
+  if (big) {
+    for (let x = cx - 8; x <= cx + 8; x += 4) px(g, x, 3, PAL.amber); // a crown of lamps
+    rect(g, cx - 2, 4 + h, 4, 4, '#d8d0e0');
+  }
+  if (level >= 10) rect(g, cx - w / 2, 4 + h - 1, w, 1, PAL.red);
+  return c;
+}
+
+/** Any enemy combatant by battle role. */
+export function paintEnemy(role: string, level: number): HTMLCanvasElement {
+  if (role === 'buggy' || role === 'harpoon' || role === 'mortar') return paintRobber(role, level);
+  if (role === 'crawler' || role === 'shade' || role === 'champion') return paintBaronUnit(role, level);
+  return paintPirate(level);
+}
+
+export const MINE_W = 72;
+export const MINE_H = 56;
+
+/** A night baron's mine entrance: a rock mound and a tunnel mouth; lanterns lit while open. */
+export function paintMine(open: boolean): HTMLCanvasElement {
+  const [c, g] = makeCanvas(MINE_W, MINE_H);
+  const cx = MINE_W / 2;
+  // mound
+  circle(g, cx, 30, 27, K);
+  circle(g, cx, 30, 26, '#3a2a4a');
+  circle(g, cx - 4, 24, 18, '#4a3660');
+  for (let i = 0; i < 40; i++) {
+    const x = cx - 22 + Math.floor(hash2(41, i, 0) * 44);
+    const y = 10 + Math.floor(hash2(41, i, 1) * 34);
+    px(g, x, y, hash2(41, i, 2) < 0.5 ? '#2a1d38' : '#5a4672');
+  }
+  rect(g, cx - 18, 6, 36, 1, '#ff6ab8'); // lit ridge
+  // rails out of the mouth
+  rect(g, cx - 5, 44, 1, 12, PAL.steel.light);
+  rect(g, cx + 4, 44, 1, 12, PAL.steel.light);
+  for (let y = 46; y < 56; y += 3) rect(g, cx - 6, y, 12, 1, '#4a3a2a');
+  // mouth
+  rect(g, cx - 11, 32, 22, 14, K);
+  circle(g, cx, 32, 11, K);
+  rect(g, cx - 12, 46, 24, 2, '#6a4a2a');
+  if (open) {
+    g.globalAlpha = 0.35;
+    rect(g, cx - 9, 34, 18, 12, '#c050ff');
+    g.globalAlpha = 1;
+    for (const x of [cx - 15, cx + 14]) {
+      rect(g, x, 30, 2, 3, PAL.amber);
+      g.globalAlpha = 0.35;
+      circle(g, x + 1, 31, 4, PAL.amber);
+      g.globalAlpha = 1;
+    }
+  } else {
+    for (let y = 26; y < 46; y += 3) rect(g, cx - 10, y, 20, 2, PAL.steel.base);
+    rect(g, cx - 10, 26, 20, 1, PAL.steel.light);
+    for (const x of [cx - 15, cx + 14]) rect(g, x, 30, 2, 3, '#4a3a20');
+  }
+  return c;
+}

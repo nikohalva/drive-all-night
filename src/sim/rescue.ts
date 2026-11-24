@@ -9,6 +9,7 @@ import { nearestCity, type Zone } from './world';
 export type RescueOutcome =
   | { type: 'rescued'; waitSeconds: number; fee: number }
   | { type: 'pirates'; waitSeconds: number }
+  | { type: 'robbers'; waitSeconds: number }
   | { type: 'destroyed'; waitSeconds: number };
 
 type RescueZone = 'sunset' | 'deep' | 'predawn' | 'scorch';
@@ -31,6 +32,7 @@ export function rollRescue(
   zone: Zone,
   secondsUntilDawn: number,
   firstRescueUsed: boolean,
+  nearCity = false,
 ): RescueOutcome {
   if (zone === 'dawn') return { type: 'destroyed', waitSeconds: 0 };
   if (!firstRescueUsed) return { type: 'rescued', waitSeconds: FIRST_RESCUE_WAIT, fee: 0 };
@@ -38,11 +40,14 @@ export function rollRescue(
   const row = RESCUE_TABLE[zone];
   const waitSeconds = (): number => row.waitMin + rng() * (row.waitMax - row.waitMin);
 
+  // robbers trail the cities: a call near one may bring them instead of help
+  if (nearCity && rng() < 0.35) return { type: 'robbers', waitSeconds: waitSeconds() };
   if (rng() < row.pirateChance) return { type: 'pirates', waitSeconds: waitSeconds() };
 
   const wait = waitSeconds();
   const tooSlow = wait >= secondsUntilDawn || (zone === 'scorch' && wait > BALANCE.SCORCH_SURVIVE_SECONDS);
-  return tooSlow ? { type: 'destroyed', waitSeconds: wait } : { type: 'rescued', waitSeconds: wait, fee: row.fee };
+  const fee = nearCity ? row.fee * 2 : row.fee;
+  return tooSlow ? { type: 'destroyed', waitSeconds: wait } : { type: 'rescued', waitSeconds: wait, fee };
 }
 
 /**
@@ -79,6 +84,7 @@ export function applyRescue(s: GameState, o: RescueOutcome): GameState {
       };
     }
     case 'pirates':
+    case 'robbers':
       return { ...timed, vehicle: { ...s.vehicle, cargo: 0 } };
     case 'destroyed':
       return timed;
@@ -96,6 +102,8 @@ export function describeRescue(o: RescueOutcome, before: GameState, after: GameS
     }
     case 'pirates':
       return 'PIRATES ANSWERED YOUR CALL. THEY TOOK YOUR CARGO';
+    case 'robbers':
+      return 'DESERT ROBBERS ANSWERED YOUR CALL. THEY TOOK YOUR CARGO';
     case 'destroyed':
       return 'NO ONE CAME IN TIME';
   }

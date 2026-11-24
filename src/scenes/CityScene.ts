@@ -53,6 +53,7 @@ const REASONS: Record<string, string> = {
   'not-owned': 'NOT IN YOUR GARAGE',
   nothing: 'NOTHING TO DO',
   required: 'EVERY RIG NEEDS AN ENGINE AND A TANK',
+  refused: 'THEY REFUSE',
 };
 
 interface Row {
