@@ -26,7 +26,8 @@ export function robberChancePerSecond(zone: Zone, distToCity: number, weak: bool
 }
 
 /** Only hostile barons send war parties: near their mine, while it is night. */
-export function baronChancePerSecond(zone: Zone, status: Standing, distToMine: number): number {
+export function baronChancePerSecond(zone: Zone, status: Standing, distToMine: number, easy = false): number {
+  if (easy) return 0;
   const night = zone === 'sunset' || zone === 'deep' || zone === 'predawn';
   return status === 'HOSTILE' && night && distToMine < 4000 ? 0.02 : 0;
 }
@@ -60,8 +61,11 @@ export function makeBaronParty(_rng: Rng, level: number, temper: Temper): Pirate
   const L = level;
   const party: Pirate[] = [
     { name: 'WAR CRAWLER', level, role: 'crawler', row: 'front', longRange: false, hp: 40 + 10 * L, maxHp: 40 + 10 * L, damage: 5 + 2 * L, accuracy: 0.65, armor: 2 + Math.floor(L / 3), speed: 60 + 3 * L },
-    { name: 'SHADE', level, role: 'shade', row: 'back', longRange: true, hp: 20 + 6 * L, maxHp: 20 + 6 * L, damage: 7 + 2 * L, accuracy: 0.7, armor: 1, speed: 70 + 3 * L },
   ];
+  // small parties are a lone crawler; a shade rides along from level 4
+  if (level >= 4) {
+    party.push({ name: 'SHADE', level, role: 'shade', row: 'back', longRange: true, hp: 20 + 6 * L, maxHp: 20 + 6 * L, damage: 7 + 2 * L, accuracy: 0.7, armor: 1, speed: 70 + 3 * L });
+  }
   if (temper === 'warlike' && level >= 8) {
     party.push({ name: 'BARON CHAMPION', level, role: 'champion', row: 'front', longRange: false, hp: 80 + 14 * L, maxHp: 80 + 14 * L, damage: 8 + 3 * L, accuracy: 0.7, armor: 4 + Math.floor(L / 3), speed: 65 + 3 * L });
   }

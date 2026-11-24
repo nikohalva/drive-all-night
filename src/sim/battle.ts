@@ -55,6 +55,8 @@ export interface BattleState {
   outcome: 'ongoing' | 'won' | 'lost' | 'fled';
   /** Cargo ripped away by harpoon hits during the fight. */
   stolenCargo: number;
+  /** Cargo carried when the fight began (harpoons cannot take more). */
+  cargoAtStart: number;
 }
 
 const MAX_LOG = 30;
@@ -144,6 +146,7 @@ export function startBattle(s: GameState, enemies: Pirate[], allies: Pirate[] = 
     log: ['Contact! Give your orders.'],
     outcome: 'ongoing',
     stolenCargo: 0,
+    cargoAtStart: s.vehicle.cargo,
   };
 }
 
@@ -302,9 +305,10 @@ export function resolveRound(b: BattleState, orders: Record<string, Order>, rng:
       if (recipient !== target) dmg = Math.ceil(dmg / 2);
       if (bracing.has(recipient.uid)) dmg = Math.ceil(dmg / 2);
       recipient.hp = Math.max(0, recipient.hp - dmg);
-      if (e.role === 'harpoon') {
-        state.stolenCargo += 5;
-        log(`${e.name} rips away 5 cargo!`);
+      const grab = Math.min(5, (state.cargoAtStart ?? 0) - state.stolenCargo);
+      if (e.role === 'harpoon' && recipient === target && grab > 0) {
+        state.stolenCargo += grab;
+        log(`${e.name} rips away ${Math.round(grab)} cargo!`);
       }
       log(
         recipient === target

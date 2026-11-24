@@ -253,3 +253,17 @@ test('allied clan riders fight on your side but are not yours to order', () => {
   const r = applyBattleResult(s, { ...b, outcome: 'won' }, { credits: 0, cargo: 0 });
   expect(r.caravan).toEqual([]);
 });
+
+test('harpoons only take cargo that is there, and not through a guardian', () => {
+  const b = startBattle(newGame(1), makeRobberGroup(() => 0, 10, false));
+  expect(resolveRound(b, {}, hit).stolenCargo).toBe(0); // empty hold
+  const s = caravanGame();
+  const loaded = { ...s, vehicle: { ...s.vehicle, cargo: 30 } };
+  const b2 = startBattle(loaded, makeRobberGroup(() => 0, 10, false));
+  const leadUid = b2.units.find((u) => u.role === 'lead')?.uid ?? '';
+  const guardUid = b2.units.find((u) => u.role === 'guardian')?.uid ?? '';
+  // everyone else stays healthier than the lead, and the guardian covers it
+  const weakLead = { ...b2, units: b2.units.map((u) => (u.uid === leadUid ? { ...u, hp: 30 } : u)) };
+  const guarded = resolveRound(weakLead, { [guardUid]: { type: 'guard', target: leadUid } }, hit);
+  expect(guarded.stolenCargo).toBe(0);
+});

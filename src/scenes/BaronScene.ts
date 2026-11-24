@@ -154,7 +154,7 @@ export class BaronScene extends Phaser.Scene {
     const s = getState();
     setState({
       ...s,
-      player: { x: this.mine.x + 46, y: nearestCopy(this.mine.y + 24, s.player.y), heading: -Math.PI / 2 },
+      player: { x: this.mine.exitX, y: nearestCopy(this.mine.exitY, s.player.y), heading: -Math.PI / 2 },
     });
     this.scene.stop();
     this.scene.get('drive').events.emit('baron-done');

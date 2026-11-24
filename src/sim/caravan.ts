@@ -102,9 +102,15 @@ export function sellEscort(s: GameState, id: number): TxResult {
   const e = s.caravan.find((x) => x.id === id);
   if (!e) return fail('nothing');
   const refund = Math.floor(escortDef(e.kind, e.tier).price * ESCORT_RESALE);
+  const after: GameState = { ...s, credits: s.credits + refund, caravan: s.caravan.filter((x) => x.id !== id) };
+  // what no longer fits goes with the vehicle that held it
+  const caps = caravanStats(after);
   return {
     ok: true,
-    state: { ...s, credits: s.credits + refund, caravan: s.caravan.filter((x) => x.id !== id) },
+    state: {
+      ...after,
+      vehicle: { ...after.vehicle, fuel: Math.min(after.vehicle.fuel, caps.tankCap), cargo: Math.min(after.vehicle.cargo, caps.cargoCap) },
+    },
   };
 }
 

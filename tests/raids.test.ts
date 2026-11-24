@@ -1,7 +1,10 @@
 import { buyEscort } from '../src/sim/caravan';
 import { newGame } from '../src/sim/game-state';
 import type { PirateGroup } from '../src/sim/pirate-fleet';
-import { makePirateGroup } from '../src/sim/pirates';
+import { autoOrders, resolveRound, startBattle } from '../src/sim/battle';
+import { makePirateGroup, pirateLevel } from '../src/sim/pirates';
+import { makeRng } from '../src/sim/rng';
+import { starterVehicle, vehicleStats } from '../src/sim/vehicle';
 import {
   baronChancePerSecond,
   isCaravanWeak,
@@ -67,4 +70,26 @@ test('ground raiders are stopped by terrain but slide along it', () => {
   expect(wall.x).toBeGreaterThan(0);
   const boxed = stepGroundGroup(g, { x: 50, y: 0 }, 1, () => true);
   expect([boxed.x, boxed.y]).toEqual([0, 100]);
+});
+
+test('no war parties hunt you during the easy start', () => {
+  expect(baronChancePerSecond('deep', 'HOSTILE', 2000, true)).toBe(0);
+  expect(baronChancePerSecond('deep', 'HOSTILE', 2000, false)).toBeGreaterThan(0);
+});
+
+test('an unupgraded rig can beat the first war party it meets after the easy start', () => {
+  const level = pirateLevel(vehicleStats(starterVehicle()).strength, 0, false);
+  let wins = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    const rng = makeRng(seed);
+    let b = startBattle(newGame(1), makeBaronParty(rng, level, 'warlike'));
+    while (b.outcome === 'ongoing') b = resolveRound(b, autoOrders(b), rng);
+    if (b.outcome === 'won') wins++;
+  }
+  expect(wins).toBeGreaterThanOrEqual(140);
+});
+
+test('small war parties are a lone crawler; shades join from level 4', () => {
+  expect(makeBaronParty(() => 0, 2, 'warlike').map((p) => p.role)).toEqual(['crawler']);
+  expect(makeBaronParty(() => 0, 4, 'wary').map((p) => p.role)).toEqual(['crawler', 'shade']);
 });

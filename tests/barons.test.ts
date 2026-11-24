@@ -2,6 +2,7 @@ import { BALANCE } from '../src/config/balance';
 import { CITY_LANES, LANE_HALF } from '../src/config/cities';
 import {
   MINE_COUNT,
+  MINE_ENTRY_RADIUS,
   adjustStanding,
   baronPrice,
   baronStock,
@@ -129,4 +130,14 @@ test('barons trade only with those they do not mistrust, cheaper for friends', (
   expect(baronPrice(1000, { standing: 50, allied: false })).toBe(1000);
   expect(baronPrice(1000, { standing: 50, allied: true })).toBe(800);
   expect(buyFromBaron(set(rich, 0), m.id, 'not-a-part')).toEqual({ ok: false, reason: 'nothing' });
+});
+
+test('every mine has an open entrance and a safe exit point, in every world', () => {
+  for (let seed = 1; seed <= 300; seed++) {
+    for (const m of mineSites(seed)) {
+      expect(isPassable(terrainAt(seed, m.x, m.y + 24))).toBe(true);
+      expect(isPassable(terrainAt(seed, m.exitX, m.exitY))).toBe(true);
+      expect(Math.hypot(m.exitX - m.x, m.exitY - (m.y + 24))).toBeLessThanOrEqual(MINE_ENTRY_RADIUS);
+    }
+  }
 });

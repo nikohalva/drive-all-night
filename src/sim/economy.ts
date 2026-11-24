@@ -97,7 +97,7 @@ export function buyHull(s: GameState, hullId: HullId, city: CityDef = HOME): TxR
   const stats = vehicleStats(next);
   return done({
     ...s,
-    vehicle: { ...next, hp: stats.maxHp, fuel: Math.min(next.fuel, stats.tankCap) },
+    vehicle: { ...next, hp: stats.maxHp, fuel: Math.min(next.fuel, caravanStats({ ...s, vehicle: next }).tankCap) },
     credits: s.credits - price,
     flags: { ...s.flags, won: s.flags.won || hullId === 'juggernaut' },
   });

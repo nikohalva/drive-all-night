@@ -17,6 +17,21 @@ export const TERRAIN_SPEED: Record<Terrain, number> = {
 
 export const isPassable = (t: Terrain): boolean => TERRAIN_SPEED[t] > 0;
 
+/** (x, y) if it is open ground, otherwise the closest open ground found in growing rings around it. */
+export function nearestPassable(seed: number, x: number, y: number): { x: number; y: number } {
+  if (isPassable(terrainAt(seed, x, y))) return { x, y };
+  for (let r = 8; r <= 800; r += 8) {
+    const steps = Math.max(16, Math.round((2 * Math.PI * r) / 8));
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2;
+      const px = x + Math.cos(a) * r;
+      const py = y + Math.sin(a) * r;
+      if (isPassable(terrainAt(seed, px, py))) return { x: Math.round(px), y: Math.round(py) };
+    }
+  }
+  return { x, y };
+}
+
 const L = BALANCE.WORLD_LEN;
 const BASE_LATTICE = 64;
 const MOUNTAIN_LATTICE = 640;

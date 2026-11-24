@@ -107,3 +107,20 @@ test('refuelling fills the whole caravan tank', () => {
   expect(ok(refuelFull(s)).vehicle.fuel).toBe(100);
   expect(escortDef('tanker', 1).tankCap).toBe(60);
 });
+
+test('buying a bigger hull keeps fuel held in tankers', () => {
+  let s = ok(buyEscort(rich(), 'tanker', 3)); // +200 tank
+  s = { ...s, vehicle: { ...s.vehicle, fuel: 230 } };
+  s = ok(buyHull(s, 'hauler'));
+  expect(s.vehicle.fuel).toBe(230);
+});
+
+test('selling a tanker or collector trims fuel and cargo to what is left', () => {
+  let s = ok(buyEscort(rich(), 'tanker', 3));
+  s = ok(buyEscort(s, 'collector', 1));
+  s = { ...s, vehicle: { ...s.vehicle, fuel: 240, cargo: 120 } };
+  const noTanker = ok(sellEscort(s, 1));
+  expect(noTanker.vehicle.fuel).toBe(40);
+  const noCollector = ok(sellEscort(s, 2));
+  expect(noCollector.vehicle.cargo).toBe(60);
+});

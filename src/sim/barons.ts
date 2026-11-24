@@ -18,6 +18,9 @@ export interface Mine {
   baron: string;
   clan: string;
   temper: Temper;
+  /** A checked open spot by the entrance where the rig comes back out. */
+  exitX: number;
+  exitY: number;
 }
 
 export interface Relation {
@@ -57,6 +60,20 @@ const STOCK: Record<Temper, string[]> = {
 
 const sites = new Map<number, Mine[]>();
 
+/** The tunnel mouth sits this far below the mine's centre. */
+export const ENTRANCE_DY = 24;
+
+/** A spot next to the entrance with open ground all round it, inside the entry radius. */
+function exitNear(seed: number, ex: number, ey: number): { x: number; y: number } | null {
+  for (const [dx, dy] of [[36, 0], [-36, 0], [0, 36], [26, 26], [-26, 26], [20, 0], [-20, 0], [0, 20]]) {
+    const x = ex + dx;
+    const y = ey + dy;
+    const clear = [[0, 0], [8, 0], [-8, 0], [0, 8], [0, -8]].every(([ox, oy]) => isPassable(terrainAt(seed, x + ox, y + oy)));
+    if (clear) return { x, y };
+  }
+  return null;
+}
+
 function openGround(seed: number, x: number, y: number): boolean {
   for (const [dx, dy] of [
     [0, 0], [40, 0], [-40, 0], [0, 40], [0, -40], [28, 28], [-28, 28], [28, -28], [-28, -28],
@@ -76,17 +93,21 @@ export function mineSites(seed: number): Mine[] {
   for (let i = 0; i < MINE_COUNT; i++) {
     let x = 0;
     let y = 0;
-    for (let attempt = 0; attempt < 400; attempt++) {
-      y = i * slot + 1000 + hash2(seed + 700, i, attempt) * (slot - 2000);
-      x = BALANCE.EDGE + 250 + hash2(seed + 701, i, attempt) * (BALANCE.WORLD_WIDTH - 2 * BALANCE.EDGE - 500);
+    let exit: { x: number; y: number } | null = null;
+    for (let attempt = 0; attempt < 2000 && !exit; attempt++) {
+      y = Math.round(i * slot + 1000 + hash2(seed + 700, i, attempt) * (slot - 2000));
+      x = Math.round(BALANCE.EDGE + 250 + hash2(seed + 701, i, attempt) * (BALANCE.WORLD_WIDTH - 2 * BALANCE.EDGE - 500));
       if (CITY_LANES.some((lane) => Math.abs(x - lane) < LANE_HALF + 150)) continue;
-      if (openGround(seed, x, y)) break;
+      if (!openGround(seed, x, y) || !isPassable(terrainAt(seed, x, y + ENTRANCE_DY))) continue;
+      exit = exitNear(seed, x, y + ENTRANCE_DY);
     }
     const h = hash2(seed + 703, i, 0);
     mines.push({
       id: `mine-${i}`,
-      x: Math.round(x),
-      y: Math.round(y),
+      x,
+      y,
+      exitX: exit ? exit.x : x,
+      exitY: exit ? exit.y : y + ENTRANCE_DY,
       baron: BARONS[(i + offset) % BARONS.length],
       clan: CLANS[(i + offset * 5) % CLANS.length],
       temper: h < 0.3 ? 'warlike' : h < 0.7 ? 'wary' : 'trader',

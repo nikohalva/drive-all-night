@@ -88,6 +88,7 @@ export class CityScene extends Phaser.Scene {
 
   create(): void {
     this.tab = 0;
+    this.pendingSell = null;
     this.cursors = TABS.map(() => 0);
     this.locked = false;
     this.lastSig = '';
@@ -139,6 +140,7 @@ export class CityScene extends Phaser.Scene {
 
   private moveTab(step: number): void {
     if (this.locked) return;
+    this.pendingSell = null;
     this.tab = (this.tab + step + TABS.length) % TABS.length;
   }
 

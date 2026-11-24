@@ -137,3 +137,12 @@ Known mines show on the map in their standing's colour, with the baron's name.
 
 ## Left to the builder
 Exact numbers (stats, prices, spawn rates, standing steps), names, and sprite details, within the shapes above. Every tunable lives in `src/config/`.
+
+---
+
+## As built (notes after the final review)
+
+- **Easy start:** night baron war parties do not hunt you during the easy start. Afterwards, small parties are a lone war crawler; shades join from level 4 and champions at warlike mines from level 8.
+- **Mines:** every mine has a checked entrance and exit on open ground. As a safety net, the rig is moved to the nearest open ground whenever it would start on blocked ground.
+- **Cut for now:** clan trade sells parts only, not escorts. Scouts' extra sight finds mines but does not warn of raiders earlier.
+- **Known small issues:** with five or more vehicles in one battle row, sprites can run under the log or the order panel. Untested save paths: v2→v4 and v3→v4 upgrades work by the same step-by-step code as v1→v4 but have no test of their own.

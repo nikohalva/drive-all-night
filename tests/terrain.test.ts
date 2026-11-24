@@ -4,6 +4,7 @@ import {
   RIFT_SPACING,
   TERRAIN_SPEED,
   isPassable,
+  nearestPassable,
   riftAt,
   terrainAt,
   type Terrain,
@@ -83,4 +84,20 @@ test('every canyon has a pass in every stretch, so you can always get through', 
       for (let y = r.top - 20; y < r.bottom + 20; y += 2) expect(terrainAt(5, px, y)).not.toBe('canyon');
     }
   }
+});
+
+test('nearestPassable finds open ground next to a blocked spot, and leaves open ground alone', () => {
+  let blocked: { x: number; y: number } | null = null;
+  for (let y = 0; y < L && !blocked; y += 97) {
+    for (let x = 300; x < 3800; x += 53) {
+      if (!isPassable(terrainAt(9, x, y))) {
+        blocked = { x, y };
+        break;
+      }
+    }
+  }
+  if (!blocked) throw new Error('no blocked ground found');
+  const p = nearestPassable(9, blocked.x, blocked.y);
+  expect(isPassable(terrainAt(9, p.x, p.y))).toBe(true);
+  expect(nearestPassable(9, CITY_LANES[1], 500)).toEqual({ x: CITY_LANES[1], y: 500 });
 });

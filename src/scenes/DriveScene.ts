@@ -22,7 +22,7 @@ import type { PirateGroup } from '../sim/pirate-fleet';
 import { Grace } from '../sim/pirates';
 import { makeRng, randomSeed } from '../sim/rng';
 import { loadGame } from '../sim/save';
-import { TERRAIN_SPEED, isPassable, terrainAt } from '../sim/terrain';
+import { TERRAIN_SPEED, isPassable, nearestPassable, terrainAt } from '../sim/terrain';
 import { addCargo, burnFuel, isBroken, transferToTank, vehicleStats } from '../sim/vehicle';
 import {
   cityPositions,
@@ -118,6 +118,7 @@ export class DriveScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.unstick();
     const s = getState();
     this.k = { x: s.player.x, y: s.player.y, heading: s.player.heading, vx: 0, vy: 0 };
     this.odometer = 0;
@@ -382,14 +383,15 @@ export class DriveScene extends Phaser.Scene {
     const city = nearestCity(p.x, p.y, s.t);
     const robberChance = robberChancePerSecond(zone, Math.hypot(city.x - p.x, city.y - p.y), isCaravanWeak(s), easy);
     const near = nearestMine(s, p.x, p.y);
-    const baronChance = near.dist < MINE_HUNT_RADIUS ? baronChancePerSecond(zone, statusOf(relation(s, near.mine)), near.dist) : 0;
+    const baronChance =
+      near.dist < MINE_HUNT_RADIUS ? baronChancePerSecond(zone, statusOf(relation(s, near.mine)), near.dist, easy) : 0;
     const roll = this.raidRng();
     let group: RaidGroup | null = null;
     if (roll < robberChance) {
       const level = pirateLevel(strength, cargo, easy);
       group = { id: this.pirates.claimId(), x: 0, y: 0, level, pirates: makeRobberGroup(this.raidRng, level, easy), faction: 'robbers' };
     } else if (roll < robberChance + baronChance) {
-      const level = pirateLevel(strength, 0, false) + 1;
+      const level = pirateLevel(strength, 0, false);
       group = {
         id: this.pirates.claimId(),
         x: 0,
@@ -404,8 +406,9 @@ export class DriveScene extends Phaser.Scene {
     // ground raiders need open ground to start from
     for (let attempt = 0; attempt < 8; attempt++) {
       const a = this.raidRng() * Math.PI * 2;
-      const x = p.x + Math.cos(a) * 260;
-      const y = p.y + Math.sin(a) * 260;
+      // far enough out that they drive in from beyond the screen edge
+      const x = p.x + Math.cos(a) * 420;
+      const y = p.y + Math.sin(a) * 420;
       if (isPassable(terrainAt(s.seed, x, y))) {
         this.pirates.add({ ...group, x, y });
         return;
@@ -456,6 +459,14 @@ export class DriveScene extends Phaser.Scene {
     this.scene.launch('city', { cityId: this.dockCity });
   }
 
+  /** Safety net: never leave the rig standing on blocked ground, where it could not move at all. */
+  private unstick(): void {
+    const s = getState();
+    if (isPassable(terrainAt(s.seed, s.player.x, s.player.y))) return;
+    const p = nearestPassable(s.seed, s.player.x, s.player.y);
+    setState({ ...s, player: { ...s.player, x: p.x, y: p.y } });
+  }
+
   /** Open the world map; the clock stops until it closes. */
   private openMap(): void {
     this.frozen = true;
@@ -465,6 +476,7 @@ export class DriveScene extends Phaser.Scene {
 
   /** Back from the city: the menu has placed the rig beside the dock. */
   private onCityDone(): void {
+    this.unstick();
     const p = getState().player;
     this.k = { x: p.x, y: p.y, heading: p.heading, vx: 0, vy: 0 };
     this.convoy.reset(p.x, p.y);
