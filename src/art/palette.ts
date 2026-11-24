@@ -1,0 +1,52 @@
+/** Synthwave palette, copied from the approved mockup (mockups/synthwave-driving-v2.html). */
+export const PAL = {
+  ink: '#07030c',
+  night: '#1b0a33',
+  nightLight: '#2a1150',
+  nightDark: '#140726',
+  duneBody: '#12062a',
+  duneMid: '#6a1f7a',
+  duneRim: '#ff4fa3',
+  cyan: '#3ef0ff',
+  cyanDeep: '#36b6ff',
+  cyanPale: '#7ffcff',
+  pink: '#ff2bd6',
+  amber: '#ffd23f',
+  dawn: '#bcd8ff',
+  pirate: '#7dff3a',
+  red: '#ff3030',
+  white: '#ffffff',
+  /** Striped sunset band, hottest first. */
+  SUN: [
+    '#fff1a8',
+    '#ffd23f',
+    '#ffb03a',
+    '#ff8a3d',
+    '#ff6a52',
+    '#ff4f6e',
+    '#ff3e8a',
+    '#f0309c',
+    '#d02ba6',
+    '#a42aa8',
+    '#7c23a2',
+    '#5a1c94',
+  ],
+  /** Player rig: warm orange cab and red-orange collector units. */
+  cab: { base: '#ff6a2a', light: '#ffa45c', dark: '#a8303a' },
+  unit: { base: '#d8452e', light: '#ff7a4a', dark: '#7e1e30' },
+  /** Cool steel for plates, bumpers and rivets. */
+  steel: { base: '#3a3550', light: '#6a6488', dark: '#1c1828' },
+  tank: { base: '#4a4466', light: '#8a84aa', dark: '#252134' },
+  rubber: '#1c1828',
+  rubberLight: '#5a5474',
+  rubberMid: '#3a3550',
+  glass: '#2bb8d8',
+  /** Pirate gunships: olive at low level, gunmetal at high level. */
+  olive: { base: '#3e5230', light: '#6a8a4c', dark: '#18220f' },
+  oliveWing: { base: '#34452a', light: '#5e7a44', dark: '#141c10' },
+  gunmetal: { base: '#2c3040', light: '#5a6078', dark: '#10131c' },
+  pod: { base: '#2a2a34', light: '#5a5a6a', dark: '#121218' },
+  /** City platform. */
+  city: { base: '#2a2040', light: '#4e3c72', dark: '#140c22' },
+  cityTank: { base: '#3e3458', light: '#6e5e96', dark: '#1c1430' },
+} as const;

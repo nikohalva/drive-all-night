@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
+import { GalleryScene } from './scenes/GalleryScene';
 
 export const GAME_W = 480;
 export const GAME_H = 270;
@@ -13,7 +14,7 @@ const game = new Phaser.Game({
   roundPixels: true,
   backgroundColor: '#07020f',
   scale: { mode: Phaser.Scale.NONE, zoom: 1 },
-  scene: [BootScene],
+  scene: [BootScene, GalleryScene],
 });
 
 /** Whole-number zoom only, so pixels stay crisp. */
