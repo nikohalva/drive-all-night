@@ -93,6 +93,23 @@ function planOf(v: VehicleState): RigPlan {
   };
 }
 
+export interface RigLayout {
+  w: number;
+  h: number;
+  /** The cab's centre: the point the rig turns around. */
+  pivotX: number;
+  pivotY: number;
+  /** Where the collector intake sits, measured from the top of the sprite. */
+  rearY: number;
+}
+
+/** Sprite geometry for each hull; keep in step with the sizes used by paintRig. */
+export function rigLayout(hull: HullId): RigLayout {
+  if (hull === 'scout') return { w: 30, h: 30, pivotX: 15, pivotY: 13, rearY: 24 };
+  if (hull === 'hauler') return { w: 48, h: 62, pivotX: 24, pivotY: 15, rearY: 55 };
+  return { w: 58, h: 90, pivotX: 29, pivotY: 15, rearY: 82 };
+}
+
 /** Everything about a vehicle that changes how its sprite looks. */
 export function rigSignature(v: VehicleState): string {
   const p = planOf(v);

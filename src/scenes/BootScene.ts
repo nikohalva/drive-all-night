@@ -11,8 +11,7 @@ export class BootScene extends Phaser.Scene {
       this.scene.start('gallery', { page: Number(params.get('gallery')) || 1 });
       return;
     }
-    this.add
-      .text(240, 135, 'DRIVE ALL NIGHT', { fontFamily: 'monospace', fontSize: '16px', color: '#ff2bd6' })
-      .setOrigin(0.5);
+    // The title screen arrives in a later task; for now a new game starts straight away.
+    this.scene.start('drive');
   }
 }
