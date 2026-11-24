@@ -1,5 +1,6 @@
 import { HULLS, PARTS, REPAIR_KIT, SLOT_TYPES, type HullId, type SlotType } from '../config/catalog';
-import { CITY_BY_ID, START_CITY, type CityDef } from '../config/cities';
+import { CITY_BY_ID, START_CITY, cityPrice, type CityDef } from '../config/cities';
+import { caravanStats } from './caravan';
 import type { GameState } from './game-state';
 import { vehicleStats, type VehicleState } from './vehicle';
 
@@ -18,8 +19,7 @@ const withVehicle = (s: GameState, patch: Partial<VehicleState>): GameState => (
 
 const HOME = CITY_BY_ID[START_CITY];
 
-/** A catalog price as charged by `city`. */
-export const cityPrice = (price: number, city: CityDef): number => Math.round(price * city.priceFactor);
+export { cityPrice };
 
 /** Sell all cargo; proceeds clear debt first, the rest becomes credits. */
 export function sellCargo(s: GameState, city: CityDef = HOME): TxResult {
@@ -129,7 +129,7 @@ export function repairFull(s: GameState, city: CityDef = HOME): TxResult {
 
 /** Refuel as much as the credits cover (a full tank when affordable). */
 export function refuelFull(s: GameState, city: CityDef = HOME): TxResult {
-  const missing = vehicleStats(s.vehicle).tankCap - s.vehicle.fuel;
+  const missing = caravanStats(s).tankCap - s.vehicle.fuel;
   if (missing <= 0) return fail('nothing');
   const fullCost = Math.ceil(missing * city.fuelPrice);
   if (s.credits >= fullCost) {

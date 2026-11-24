@@ -2,55 +2,69 @@ import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
 import { rigLayout } from '../art/painters';
-import { ensurePirateTexture, ensureRigTextures } from '../art/textures';
+import { ensureEscortTextures, ensurePirateTexture, ensureRigTextures } from '../art/textures';
+import type { EscortKind } from '../config/escorts';
 import { VIEW } from '../config/view';
 import { getState, setState } from '../game/session';
 import {
   applyBattleResult,
+  autoOrders,
   battleLoot,
+  isAlive,
+  living,
+  ordersFor,
+  resolveRound,
   startBattle,
-  takeTurn,
-  type Action,
+  targetsFor,
   type BattleState,
+  type Order,
+  type OrderType,
+  type Unit,
 } from '../sim/battle';
 import type { Pirate } from '../sim/pirates';
 import { makeRng, randomSeed } from '../sim/rng';
-import { vehicleStats } from '../sim/vehicle';
 
 const W = VIEW.W;
 const H = VIEW.H;
-const PANEL_Y = H - 56;
-const SEGMENTS = 10;
-const ENEMY_X = W - 108;
-const RIG_PIVOT_X = Math.round(W * 0.36);
-const RIG_Y = Math.round(H * 0.62);
-/** How long the log stays readable between rounds. */
-const ROUND_PAUSE_MS = 450;
-const RESULT_MS = 1500;
+const PANEL_Y = H - 88;
+const COLUMN_X = { player: { front: 250, back: 140 }, enemy: { front: 400, back: 510 } } as const;
+const ROW_STEP = 50;
+const CENTRE_Y = 150;
+const ROUND_PAUSE_MS = 650;
+const RESULT_MS = 1600;
+
+const ORDER_LABEL: Record<OrderType, string> = {
+  fire: 'FIRE',
+  guard: 'GUARD AN ALLY',
+  repair: 'REPAIR AN ALLY',
+  spot: 'SPOT TARGETS',
+  brace: 'BRACE',
+  move: 'SWAP ROW',
+  kit: 'USE REPAIR KIT',
+  flee: 'FLEE (WHOLE CARAVAN)',
+};
 
 export interface BattleData {
   enemies: Pirate[];
 }
 
-type Phase = 'choose' | 'resolving' | 'over';
+type Phase = 'order' | 'target' | 'resolving' | 'over';
 
-const RIG_SCALE = { scout: 3, hauler: 2, juggernaut: 1.5 } as const;
-const S = H / 270;
-const enemyYs = (n: number): number[] =>
-  (n === 1 ? [140] : n === 2 ? [105, 175] : [80, 140, 200]).map((y) => Math.round(y * S));
-
-/** Turn-based fight on its own screen. The world clock is frozen while this runs. */
+/** Tactical turn-based fight: give every vehicle an order, then the round plays out. */
 export class BattleScene extends Phaser.Scene {
   private enemies0: Pirate[] = [];
   private battle!: BattleState;
   private rng = makeRng(1);
-  private target = 0;
-  private phase: Phase = 'choose';
+  private orders: Record<string, Order> = {};
+  /** Index into the living player units of the vehicle being given an order. */
+  private active = 0;
+  private menu = 0;
+  private targetIndex = 0;
+  private phase: Phase = 'order';
   private resultLines: string[] = [];
+  private sprites = new Map<string, Phaser.GameObjects.Image>();
   private canvas!: Phaser.Textures.CanvasTexture;
   private lastSig = '';
-  private rigSprite!: Phaser.GameObjects.Image;
-  private enemySprites: Phaser.GameObjects.Image[] = [];
 
   constructor() {
     super('battle');
@@ -61,125 +75,214 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create(): void {
-    const s = getState();
     this.rng = makeRng(randomSeed());
-    this.battle = startBattle(vehicleStats(s.vehicle), s.vehicle, this.enemies0);
-    this.target = 0;
-    this.phase = 'choose';
+    this.battle = startBattle(getState(), this.enemies0);
+    this.orders = {};
+    this.active = 0;
+    this.menu = 0;
+    this.phase = 'order';
     this.resultLines = [];
     this.lastSig = '';
-    this.enemySprites = [];
+    this.sprites = new Map();
 
     this.drawBackground();
-
-    const hull = s.vehicle.hullId;
-    const layout = rigLayout(hull);
-    this.rigSprite = this.add
-      .image(RIG_PIVOT_X, RIG_Y, ensureRigTextures(this, s.vehicle)[0])
-      .setOrigin(layout.pivotX / layout.w, layout.pivotY / layout.h)
-      .setScale(RIG_SCALE[hull])
-      .setRotation(Math.PI / 2)
-      .setDepth(10);
-
-    const ys = enemyYs(this.enemies0.length);
-    this.enemies0.forEach((e, i) => {
-      const sprite = this.add
-        .image(ENEMY_X, ys[i], ensurePirateTexture(this, e.level))
-        .setScale(3)
-        .setRotation(Math.PI / 2)
-        .setDepth(10);
-      this.enemySprites.push(sprite);
-      this.tweens.add({
-        targets: sprite,
-        y: ys[i] + 5,
-        duration: 900 + i * 150,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    });
+    this.makeSprites();
 
     if (this.textures.exists('battle-ui')) this.textures.remove('battle-ui');
     this.canvas = this.textures.createCanvas('battle-ui', W, H) as Phaser.Textures.CanvasTexture;
     this.add.image(0, 0, 'battle-ui').setOrigin(0, 0).setDepth(20);
 
     this.bindKeys();
-    this.redraw();
   }
 
   update(): void {
+    this.layoutSprites();
     this.redraw();
   }
 
-  // ------------------------------------------------------------------ input
+  // --------------------------------------------------------------- sprites
+
+  private makeSprites(): void {
+    const s = getState();
+    for (const u of this.battle.units) {
+      let key: string;
+      let scale = 2;
+      if (u.role === 'lead') {
+        key = ensureRigTextures(this, s.vehicle)[0];
+        scale = s.vehicle.hullId === 'scout' ? 2 : 1;
+      } else if (u.side === 'player') {
+        const e = s.caravan.find((x) => x.id === u.escortId);
+        key = ensureEscortTextures(this, u.role as EscortKind, e?.tier ?? 1)[0];
+      } else {
+        key = ensurePirateTexture(this, u.level ?? 1);
+      }
+      // player sprites face up and enemy sprites face down; a quarter turn faces each at the other side
+      const img = this.add.image(0, 0, key).setScale(scale).setRotation(Math.PI / 2).setDepth(10);
+      if (u.role === 'lead') {
+        const l = rigLayout(s.vehicle.hullId);
+        img.setOrigin(l.pivotX / l.w, 0.5);
+      }
+      this.sprites.set(u.uid, img);
+    }
+    this.layoutSprites();
+  }
+
+  /** Where each unit stands: its side and row pick the column, its place in the row the height. */
+  private positionOf(u: Unit): { x: number; y: number } {
+    const rowMates = this.battle.units.filter((x) => x.side === u.side && x.row === u.row);
+    const i = rowMates.findIndex((x) => x.uid === u.uid);
+    return { x: COLUMN_X[u.side][u.row], y: Math.round(CENTRE_Y + (i - (rowMates.length - 1) / 2) * ROW_STEP) };
+  }
+
+  private layoutSprites(): void {
+    for (const u of this.battle.units) {
+      const img = this.sprites.get(u.uid);
+      if (!img) continue;
+      const p = this.positionOf(u);
+      img.setPosition(p.x, p.y).setAlpha(isAlive(u) ? 1 : 0.2);
+    }
+  }
+
+  // ----------------------------------------------------------------- input
 
   private bindKeys(): void {
     const kb = this.input.keyboard;
     if (!kb) return;
     kb.removeAllListeners();
-    kb.on('keydown-ONE', () => this.fire(0));
-    kb.on('keydown-TWO', () => this.fire(1));
-    kb.on('keydown-THREE', () => this.fire(2));
-    kb.on('keydown-B', () => this.act({ type: 'brace' }));
-    kb.on('keydown-R', () => {
-      if (this.battle.player.repairKits > 0) this.act({ type: 'repair' });
-    });
-    kb.on('keydown-X', () => this.act({ type: 'flee' }));
-    for (const key of ['LEFT', 'UP', 'A', 'W']) kb.on(`keydown-${key}`, () => this.cycleTarget(-1));
-    for (const key of ['RIGHT', 'DOWN', 'D', 'S']) kb.on(`keydown-${key}`, () => this.cycleTarget(1));
+    for (const key of ['UP', 'W']) kb.on(`keydown-${key}`, () => this.step(-1, 'vertical'));
+    for (const key of ['DOWN', 'S']) kb.on(`keydown-${key}`, () => this.step(1, 'vertical'));
+    for (const key of ['LEFT', 'A']) kb.on(`keydown-${key}`, () => this.step(-1, 'horizontal'));
+    for (const key of ['RIGHT', 'D']) kb.on(`keydown-${key}`, () => this.step(1, 'horizontal'));
+    for (const key of ['ENTER', 'SPACE']) kb.on(`keydown-${key}`, () => this.confirm());
+    for (const key of ['ESC', 'BACKSPACE']) kb.on(`keydown-${key}`, () => this.back());
+    kb.on('keydown-Q', () => this.autoRest());
     this.events.once('shutdown', () => kb.removeAllListeners());
   }
 
-  private cycleTarget(step: number): void {
-    const n = this.battle.enemies.length;
-    for (let i = 1; i <= n; i++) {
-      const next = (this.target + step * i + n * i) % n;
-      if (this.battle.enemies[next].hp > 0) {
-        this.target = next;
+  private mine(): Unit[] {
+    return living(this.battle, 'player');
+  }
+
+  private activeUnit(): Unit | undefined {
+    return this.mine()[this.active];
+  }
+
+  private menuItems(): OrderType[] {
+    const u = this.activeUnit();
+    return u ? ordersFor(this.battle, u) : [];
+  }
+
+  /** Who the highlighted order may be aimed at. */
+  private targetChoices(): Unit[] {
+    const u = this.activeUnit();
+    const type = this.menuItems()[this.menu];
+    if (!u) return [];
+    if (type === 'fire') {
+      const spotted = this.mine().some((m) => m.role === 'scout' && this.orders[m.uid]?.type === 'spot');
+      return targetsFor(this.battle, u, spotted);
+    }
+    if (type === 'guard') return this.mine().filter((m) => m.uid !== u.uid);
+    if (type === 'repair') return this.mine();
+    return [];
+  }
+
+  private step(dir: number, axis: 'vertical' | 'horizontal'): void {
+    if (this.phase === 'order' && axis === 'vertical') {
+      const n = this.menuItems().length;
+      if (n > 0) this.menu = (this.menu + dir + n) % n;
+    } else if (this.phase === 'target') {
+      const n = this.targetChoices().length;
+      if (n > 0) this.targetIndex = (this.targetIndex + dir + n) % n;
+    }
+  }
+
+  private confirm(): void {
+    const u = this.activeUnit();
+    if (!u) return;
+    if (this.phase === 'order') {
+      const type = this.menuItems()[this.menu];
+      if (type === 'fire' || type === 'guard' || type === 'repair') {
+        const choices = this.targetChoices();
+        if (choices.length === 0) return;
+        // start on the weakest enemy, or the most hurt ally
+        const sorted = [...choices].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
+        this.targetIndex = choices.indexOf(sorted[0]);
+        this.phase = 'target';
         return;
       }
+      this.setOrder(u, { type } as Order);
+    } else if (this.phase === 'target') {
+      const type = this.menuItems()[this.menu] as 'fire' | 'guard' | 'repair';
+      const target = this.targetChoices()[this.targetIndex];
+      if (target) this.setOrder(u, { type, target: target.uid });
     }
   }
 
-  private fire(weapon: number): void {
-    if (weapon < this.battle.player.weapons.length) this.act({ type: 'fire', weapon, target: this.target });
+  private back(): void {
+    if (this.phase === 'target') {
+      this.phase = 'order';
+    } else if (this.phase === 'order' && this.active > 0) {
+      this.active--;
+      const u = this.activeUnit();
+      if (u) delete this.orders[u.uid];
+      this.menu = 0;
+    }
   }
 
-  private act(action: Action): void {
-    if (this.phase !== 'choose') return;
-    const before = this.battle;
-    this.battle = takeTurn(before, action, this.rng);
-    if (this.battle === before) return; // a bad pick costs no turn
-    this.feedback(before, this.battle);
-    if (!this.battle.enemies[this.target] || this.battle.enemies[this.target].hp <= 0) this.cycleTarget(1);
+  private setOrder(u: Unit, order: Order): void {
+    this.orders[u.uid] = order;
+    this.phase = 'order';
+    this.menu = 0;
+    if (order.type === 'flee') {
+      this.resolve();
+      return;
+    }
+    this.active++;
+    if (this.active >= this.mine().length) this.resolve();
+  }
 
-    if (this.battle.outcome === 'ongoing') {
-      this.phase = 'resolving';
-      this.time.delayedCall(ROUND_PAUSE_MS, () => {
-        if (this.phase === 'resolving') this.phase = 'choose';
-      });
-    } else {
+  /** Q: sensible orders for everyone still waiting, then fight. */
+  private autoRest(): void {
+    if (this.phase !== 'order' && this.phase !== 'target') return;
+    const auto = autoOrders(this.battle);
+    for (const u of this.mine()) if (!this.orders[u.uid]) this.orders[u.uid] = auto[u.uid];
+    this.resolve();
+  }
+
+  private resolve(): void {
+    const before = this.battle;
+    this.battle = resolveRound(before, this.orders, this.rng);
+    this.feedback(before, this.battle);
+    this.orders = {};
+    this.active = 0;
+    this.menu = 0;
+    if (this.battle.outcome !== 'ongoing') {
       this.phase = 'over';
       this.finish();
+      return;
     }
+    this.phase = 'resolving';
+    this.time.delayedCall(ROUND_PAUSE_MS, () => {
+      if (this.phase === 'resolving') this.phase = 'order';
+    });
   }
 
-  // --------------------------------------------------------------- feedback
-
   private feedback(before: BattleState, after: BattleState): void {
-    if (after.player.hp < before.player.hp) {
-      this.cameras.main.shake(140, 0.006);
-      this.rigSprite.setTintFill(0xff3030);
-      this.time.delayedCall(110, () => this.rigSprite.clearTint());
-    }
-    after.enemies.forEach((e, i) => {
-      const sprite = this.enemySprites[i];
-      if (e.hp < before.enemies[i].hp) {
-        sprite.setTintFill(0xffffff);
-        this.time.delayedCall(90, () => sprite.clearTint());
+    let mineHurt = false;
+    for (const u of after.units) {
+      const prev = before.units.find((x) => x.uid === u.uid);
+      const img = this.sprites.get(u.uid);
+      if (!prev || !img) continue;
+      if (u.hp < prev.hp) {
+        img.setTintFill(u.side === 'player' ? 0xff3030 : 0xffffff);
+        this.time.delayedCall(110, () => img.clearTint());
+        if (u.side === 'player') mineHurt = true;
+      } else if (u.hp > prev.hp) {
+        img.setTintFill(0x7dff3a);
+        this.time.delayedCall(140, () => img.clearTint());
       }
-      if (e.hp <= 0) sprite.setAlpha(0.2);
-    });
+    }
+    if (mineHurt) this.cameras.main.shake(140, 0.006);
   }
 
   private finish(): void {
@@ -187,16 +290,16 @@ export class BattleScene extends Phaser.Scene {
     const loot = this.battle.outcome === 'won' ? battleLoot(this.enemies0, this.rng) : { credits: 0, cargo: 0 };
     const next = applyBattleResult(state, this.battle, loot);
     setState(next);
-
+    const wrecked = next.caravan.filter((e) => e.hp <= 0).length - state.caravan.filter((e) => e.hp <= 0).length;
     if (this.battle.outcome === 'won') {
       const gained = Math.round(next.vehicle.cargo - state.vehicle.cargo);
       this.resultLines = ['VICTORY', `+${loot.credits} CR   +${gained} X`];
     } else if (this.battle.outcome === 'fled') {
-      this.resultLines = ['YOU GOT AWAY'];
+      this.resultLines = ['THE CARAVAN GOT AWAY'];
     } else {
       this.resultLines = ['THEY STRIPPED YOUR CARGO'];
     }
-
+    if (wrecked > 0) this.resultLines.push(`${wrecked} ESCORT${wrecked > 1 ? 'S' : ''} WRECKED - REPAIR IN A CITY`);
     this.time.delayedCall(RESULT_MS, () => {
       const outcome = this.battle.outcome;
       this.scene.stop();
@@ -211,34 +314,34 @@ export class BattleScene extends Phaser.Scene {
     const hex = (c: string): number => parseInt(c.slice(1), 16);
     g.fillStyle(0x12062a, 1);
     g.fillRect(0, 0, W, H);
-
-    // striped sun on the horizon
-    const horizon = Math.round(H * 0.27);
+    const horizon = 70;
     for (let y = 0; y < 36; y++) {
       if (y > 16 && y % 4 < (y - 16) / 5) continue;
       g.fillStyle(hex(PAL.SUN[Math.min(11, Math.floor(y / 3))]), 1);
       g.fillRect(0, horizon - 40 + y, W, 1);
     }
-    for (let y = 0; y < 30; y += 2) {
-      g.fillStyle(hex('#ff3e8a'), 0.18 * (1 - y / 30));
-      g.fillRect(0, horizon - 40 - y, W, 2);
-    }
-
-    // neon grid floor running to the horizon
     g.fillStyle(hex(PAL.night), 1);
     g.fillRect(0, horizon, W, H - horizon);
-    g.lineStyle(1, hex(PAL.cyan), 0.3);
-    for (let i = 1; i <= 10; i++) {
-      const y = Math.round(horizon + i * i * 1.9);
+    g.lineStyle(1, hex(PAL.cyan), 0.25);
+    for (let i = 1; i <= 12; i++) {
+      const y = Math.round(horizon + i * i * 2);
       g.lineBetween(0, y, W, y);
     }
-    for (let x = -240; x <= 720; x += 60) g.lineBetween(240, horizon, x, H);
+    for (let x = -400; x <= W + 400; x += 60) g.lineBetween(W / 2, horizon, x, H);
     g.fillStyle(hex(PAL.pink), 1);
     g.fillRect(0, horizon, W, 1);
   }
 
   private redraw(): void {
-    const sig = JSON.stringify({ b: this.battle, t: this.target, p: this.phase, r: this.resultLines });
+    const sig = JSON.stringify({
+      b: this.battle,
+      o: this.orders,
+      a: this.active,
+      m: this.menu,
+      t: this.targetIndex,
+      p: this.phase,
+      r: this.resultLines,
+    });
     if (sig === this.lastSig) return;
     this.lastSig = sig;
     const ctx = this.canvas.getContext();
@@ -249,77 +352,90 @@ export class BattleScene extends Phaser.Scene {
 
   private text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color: string, scale = 1): void {
     ctx.save();
-    ctx.translate(x, y);
+    ctx.translate(Math.round(x), Math.round(y));
     ctx.scale(scale, scale);
     drawText(ctx, s, 0, 0, color, scale > 1 ? `${color}55` : undefined);
     ctx.restore();
   }
 
-  private centered(ctx: CanvasRenderingContext2D, s: string, y: number, color: string, scale = 1): void {
-    this.text(ctx, s, Math.round((W - textWidth(s) * scale) / 2), y, color, scale);
-  }
-
-  private bar(ctx: CanvasRenderingContext2D, x: number, y: number, frac: number, color: string, segW = 4): void {
-    const filled = frac <= 0 ? 0 : Math.ceil(Math.min(1, frac) * SEGMENTS);
-    for (let i = 0; i < SEGMENTS; i++) {
-      ctx.fillStyle = i < filled ? color : '#2a1a40';
-      ctx.fillRect(x + i * (segW + 1), y, segW, 4);
-    }
-  }
-
   private drawUi(ctx: CanvasRenderingContext2D): void {
     const b = this.battle;
+    const active = this.phase === 'order' || this.phase === 'target' ? this.activeUnit() : undefined;
+    const target = this.phase === 'target' ? this.targetChoices()[this.targetIndex] : undefined;
+
+    this.text(ctx, 'BACK', COLUMN_X.player.back - 8, 76, '#7a6a9a');
+    this.text(ctx, 'FRONT', COLUMN_X.player.front - 10, 76, '#7a6a9a');
+    this.text(ctx, 'FRONT', COLUMN_X.enemy.front - 10, 76, '#7a6a9a');
+    this.text(ctx, 'BACK', COLUMN_X.enemy.back - 8, 76, '#7a6a9a');
+
+    // unit plates: name, hull bar, current order
+    for (const u of b.units) {
+      const p = this.positionOf(u);
+      const alive = isAlive(u);
+      const color = u.side === 'player' ? (u.role === 'lead' ? PAL.cyan : PAL.white) : PAL.pirate;
+      const name = u.role === 'lead' ? 'YOU' : u.name;
+      this.text(ctx, name, p.x - textWidth(name) / 2, p.y + 18, alive ? color : '#4a3a5a');
+      ctx.fillStyle = '#2a1a40';
+      ctx.fillRect(p.x - 16, p.y + 25, 32, 3);
+      ctx.fillStyle = u.side === 'player' ? PAL.pink : PAL.pirate;
+      ctx.fillRect(p.x - 16, p.y + 25, Math.round(32 * Math.max(0, u.hp / u.maxHp)), 3);
+      const order = this.orders[u.uid];
+      if (order) this.text(ctx, ORDER_LABEL[order.type].split(' ')[0], p.x - 12, p.y - 26, PAL.amber);
+      if (active && u.uid === active.uid) {
+        ctx.strokeStyle = PAL.cyan;
+        ctx.strokeRect(p.x - 26.5, p.y - 20.5, 53, 52);
+      }
+      if (target && u.uid === target.uid) {
+        ctx.strokeStyle = PAL.amber;
+        ctx.strokeRect(p.x - 26.5, p.y - 20.5, 53, 52);
+        this.text(ctx, '>', p.x - 36, p.y - 3, PAL.amber, 2);
+      }
+    }
 
     // log
-    ctx.fillStyle = 'rgba(7,3,12,0.6)';
-    ctx.fillRect(4, 4, 250, 40);
-    b.log.slice(-4).forEach((line, i) => this.text(ctx, line.toUpperCase(), 8, 8 + i * 9, i === 3 ? PAL.white : PAL.dawn));
-    this.text(ctx, `ROUND ${b.round}`, W - textWidth(`ROUND ${b.round}`) - 6, 6, PAL.cyan);
+    ctx.fillStyle = 'rgba(7,3,12,0.65)';
+    ctx.fillRect(4, 4, 330, 34);
+    b.log.slice(-3).forEach((line, i) => this.text(ctx, line.toUpperCase(), 8, 8 + i * 9, i === 2 ? PAL.white : PAL.dawn));
+    const round = `ROUND ${b.round}`;
+    this.text(ctx, round, W - textWidth(round) - 6, 6, PAL.cyan);
 
-    // enemies
-    const ys = enemyYs(b.enemies.length);
-    b.enemies.forEach((e, i) => {
-      const alive = e.hp > 0;
-      const label = `${e.name.toUpperCase()} L${e.level}`;
-      this.text(ctx, label, ENEMY_X - textWidth(label) / 2, ys[i] - 46, alive ? PAL.pirate : '#4a5a3a');
-      this.bar(ctx, ENEMY_X - 25, ys[i] - 36, e.hp / e.maxHp, PAL.pirate);
-      if (alive && i === this.target && b.enemies.filter((x) => x.hp > 0).length > 1) {
-        this.text(ctx, '>', ENEMY_X - 62, ys[i] - 3, PAL.amber, 2);
-      }
-    });
-
-    // player status
-    this.text(ctx, 'HULL', 8, PANEL_Y + 6, PAL.pink);
-    this.bar(ctx, 30, PANEL_Y + 6, b.player.hp / b.player.maxHp, PAL.pink);
-    this.text(ctx, `${Math.ceil(b.player.hp)}/${b.player.maxHp}`, 86, PANEL_Y + 6, PAL.white);
-    this.text(ctx, `KITS ${b.player.repairKits}`, 130, PANEL_Y + 6, b.player.repairKits > 0 ? PAL.cyanPale : '#4a3a6a');
-
-    // menu
-    ctx.fillStyle = 'rgba(10,4,20,0.85)';
-    ctx.fillRect(0, PANEL_Y + 16, W, H - PANEL_Y - 16);
+    // order panel
+    ctx.fillStyle = 'rgba(10,4,20,0.9)';
+    ctx.fillRect(0, PANEL_Y, W, H - PANEL_Y);
     ctx.fillStyle = PAL.pink;
-    ctx.fillRect(0, PANEL_Y + 16, W, 1);
+    ctx.fillRect(0, PANEL_Y, W, 1);
 
-    const items: { text: string; color: string }[] = b.player.weapons.map((w, i) => ({
-      text: `${i + 1} FIRE ${w.name.toUpperCase()}`,
-      color: PAL.amber,
-    }));
-    items.push({ text: 'B BRACE', color: PAL.cyan });
-    items.push({ text: `R REPAIR KIT X${b.player.repairKits}`, color: b.player.repairKits > 0 ? PAL.pink : '#4a3a6a' });
-    items.push({ text: 'X FLEE', color: PAL.white });
-    const locked = this.phase !== 'choose';
-    items.forEach((item, i) => {
-      const col = i % 3;
-      const row = Math.floor(i / 3);
-      this.text(ctx, item.text, 10 + col * 210, PANEL_Y + 24 + row * 11, locked ? '#5a4a7a' : item.color);
+    if (active) {
+      const title = active.role === 'lead' ? 'YOUR RIG' : active.name;
+      this.text(ctx, `ORDERS FOR ${title}`, 10, PANEL_Y + 7, PAL.cyan);
+      this.menuItems().forEach((type, i) => {
+        const selected = i === this.menu;
+        const label = type === 'kit' ? `${ORDER_LABEL.kit} (${b.repairKits})` : ORDER_LABEL[type];
+        this.text(ctx, `${selected ? '>' : ' '} ${label}`, 10, PANEL_Y + 19 + i * 9, selected ? PAL.amber : '#b8a8d8');
+      });
+      const help =
+        this.phase === 'target'
+          ? 'LEFT/RIGHT: PICK TARGET   ENTER: CONFIRM   ESC: BACK'
+          : 'UP/DOWN: ORDER   ENTER: CHOOSE   ESC: BACK   Q: AUTO FOR THE REST';
+      this.text(ctx, help, 10, H - 9, '#7a6a9a');
+    }
+
+    // who still needs orders
+    this.text(ctx, 'CARAVAN', 330, PANEL_Y + 7, PAL.cyan);
+    this.mine().forEach((u, i) => {
+      const o = this.orders[u.uid];
+      const name = u.role === 'lead' ? 'YOUR RIG' : u.name;
+      const line = `${name.padEnd(16, ' ')} ${o ? ORDER_LABEL[o.type].split(' ')[0] : '...'}`;
+      this.text(ctx, line, 330, PANEL_Y + 19 + i * 9, o ? PAL.amber : active?.uid === u.uid ? PAL.white : '#8a7aaa');
     });
-    this.text(ctx, 'LEFT/RIGHT: TARGET', W - textWidth('LEFT/RIGHT: TARGET') - 6, H - 8, '#7a6a9a');
 
-    // result
     if (this.resultLines.length) {
-      ctx.fillStyle = 'rgba(7,3,12,0.7)';
-      ctx.fillRect(0, 96, W, 64);
-      this.resultLines.forEach((line, i) => this.centered(ctx, line, 106 + i * 20, i === 0 ? PAL.amber : PAL.white, 2));
+      ctx.fillStyle = 'rgba(7,3,12,0.75)';
+      ctx.fillRect(0, 110, W, 24 + this.resultLines.length * 20);
+      this.resultLines.forEach((line, i) => {
+        const scale = i === 0 ? 2 : 1;
+        this.text(ctx, line, (W - textWidth(line) * scale) / 2, 120 + i * 20, i === 0 ? PAL.amber : PAL.white, scale);
+      });
     }
   }
 }

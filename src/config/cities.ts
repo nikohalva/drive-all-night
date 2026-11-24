@@ -1,3 +1,5 @@
+import type { EscortKind } from './escorts';
+
 export type CityId = 'ark' | 'citadel' | 'spire';
 
 export interface CityDef {
@@ -17,6 +19,8 @@ export interface CityDef {
   priceFactor: number;
   /** Part ids this city sells (hulls and repair kits are sold everywhere). */
   stock: readonly string[];
+  /** Escort roles this city's motor pool sells (all three tiers). */
+  escortStock: readonly EscortKind[];
   /** Sprite tint so cities read apart on the map and the road. */
   tint: number;
   /** Map / UI colour. */
@@ -39,6 +43,7 @@ export const CITIES: readonly CityDef[] = [
     repairPrice: 3,
     priceFactor: 0.95,
     stock: ['engine-2', 'engine-3', 'collector-2', 'collector-3', 'cargo-2', 'cargo-3', 'tank-2'],
+    escortStock: ['collector', 'scout', 'tanker'],
     tint: 0xa8f0ff,
     color: '#7ffcff',
   },
@@ -52,6 +57,7 @@ export const CITIES: readonly CityDef[] = [
     repairPrice: 2,
     priceFactor: 1,
     stock: ALL_PARTS,
+    escortStock: ['collector', 'gunship', 'guardian', 'scout', 'tanker', 'medic'],
     tint: 0xffffff,
     color: '#ffd23f',
   },
@@ -65,6 +71,7 @@ export const CITIES: readonly CityDef[] = [
     repairPrice: 1,
     priceFactor: 1.05,
     stock: ['armor-2', 'armor-3', 'weapon-2', 'weapon-3', 'tank-2', 'tank-3'],
+    escortStock: ['guardian', 'gunship', 'medic'],
     tint: 0xffb894,
     color: '#ff8a3d',
   },
@@ -76,6 +83,9 @@ export const CITY_BY_ID: Record<CityId, CityDef> = Object.fromEntries(CITIES.map
 >;
 
 export const START_CITY: CityId = 'citadel';
+
+/** A catalog price as charged by `city`. */
+export const cityPrice = (price: number, city: CityDef): number => Math.round(price * city.priceFactor);
 
 /** Lane (x) each moving city drives along. Terrain keeps these lanes clear. */
 export const CITY_LANES: readonly number[] = CITIES.map((c) => c.laneX);

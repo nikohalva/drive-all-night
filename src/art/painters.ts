@@ -1,5 +1,6 @@
 import { BALANCE } from '../config/balance';
 import { PARTS, type HullId } from '../config/catalog';
+import type { EscortKind } from '../config/escorts';
 import { hash2 } from '../sim/rng';
 import { isPassable, terrainAt, type Terrain } from '../sim/terrain';
 import type { VehicleState } from '../sim/vehicle';
@@ -529,5 +530,97 @@ export function paintGroundChunk(seed: number, chunkX: number, chunkY: number): 
     }
   }
   g.putImageData(img, 0, 0);
+  return c;
+}
+
+// ------------------------------------------------------------------ escorts
+
+export const ESCORT_W = 24;
+export const ESCORT_H = 30;
+
+const ESCORT_RAMPS: Record<EscortKind, Ramp> = {
+  collector: PAL.unit,
+  gunship: { base: '#b8323a', light: '#ff6a5a', dark: '#5a1020' },
+  guardian: { base: '#3a5a8a', light: '#6a8ac0', dark: '#1a2a4a' },
+  scout: { base: '#a42aa8', light: '#e05ae0', dark: '#4a1050' },
+  tanker: PAL.tank,
+  medic: { base: '#2a8a8a', light: '#5ac0c0', dark: '#145050' },
+};
+
+/** An escort vehicle, facing up, with its wheels or treads at `phase`. */
+export function paintEscort(kind: EscortKind, tier: 1 | 2 | 3, phase: TreadPhase = 0): HTMLCanvasElement {
+  const [c, g] = makeCanvas(ESCORT_W, ESCORT_H);
+  const cx = 12;
+  const ramp = ESCORT_RAMPS[kind];
+  const wheels = (top: number, bottom: number): void => {
+    for (const x of [cx - 9, cx + 7]) {
+      wheel(g, x, top, 2, 5, phase);
+      wheel(g, x, bottom, 2, 5, phase);
+    }
+  };
+  const treads = (top: number, h: number): void => {
+    tread(g, cx - 10, top, 3, h, phase);
+    tread(g, cx + 7, top, 3, h, phase);
+  };
+  switch (kind) {
+    case 'collector':
+      wheels(9, 18);
+      drawIntake(g, cx, 25, 18 + 2 * tier);
+      bevel(g, cx - 6, 6, 12, 17, ramp);
+      bevel(g, cx - 4, 10, 8, 9, PAL.tank);
+      rect(g, cx - 1, 11, 2, 7, PAL.cyan);
+      rect(g, cx - 4, 7, 8, 2, PAL.glass);
+      break;
+    case 'gunship':
+      treads(7, 18);
+      bevel(g, cx - 6, 7, 12, 18, ramp);
+      bevel(g, cx - 4, 12, 8, 7, PAL.steel);
+      rect(g, cx - 3, 1, 2, 12, K);
+      rect(g, cx + 1, 1, 2, 12, K);
+      rect(g, cx - 3, 2, 1, 10, PAL.steel.light);
+      rect(g, cx + 1, 2, 1, 10, PAL.steel.light);
+      if (tier >= 3) {
+        rect(g, cx - 3, 1, 2, 1, PAL.cyan);
+        rect(g, cx + 1, 1, 2, 1, PAL.cyan);
+      }
+      break;
+    case 'guardian':
+      treads(6, 20);
+      bevel(g, cx - 7, 5, 14, 21, ramp);
+      bevel(g, cx - 8, 3, 16, 3, PAL.steel);
+      rect(g, cx - 7, 3, 14, 1, PAL.cyan);
+      for (let y = 9; y < 24; y += 4) rect(g, cx - 5, y, 10, 1, ramp.dark);
+      break;
+    case 'scout':
+      wheels(6, 19);
+      bevel(g, cx - 4, 3, 8, 23, ramp);
+      rect(g, cx - 3, 6, 6, 3, PAL.glass);
+      rect(g, cx - 1, 11, 2, 12, PAL.pink);
+      rect(g, cx + 2, 16, 1, 9, PAL.steel.light);
+      px(g, cx + 2, 15, PAL.amber);
+      break;
+    case 'tanker':
+      wheels(8, 18);
+      bevel(g, cx - 6, 4, 12, 22, ramp);
+      for (let y = 7; y < 24; y += 3) rect(g, cx - 5, y, 10, 1, '#2c2840');
+      for (let x = cx - 5; x < cx + 6; x++) {
+        px(g, x, 5, (x >> 1) % 2 ? PAL.amber : K);
+        px(g, x, 24, (x >> 1) % 2 ? PAL.amber : K);
+      }
+      break;
+    case 'medic':
+      wheels(8, 18);
+      bevel(g, cx - 6, 6, 12, 18, ramp);
+      rect(g, cx - 4, 7, 8, 3, PAL.glass);
+      rect(g, cx - 1, 12, 2, 7, PAL.pirate);
+      rect(g, cx - 3, 14, 6, 2, PAL.pirate);
+      break;
+  }
+  if (tier >= 2) {
+    rect(g, cx - 6, 22, 12, 1, PAL.steel.light);
+  }
+  if (tier >= 3) {
+    rect(g, cx - 6, 23, 12, 1, PAL.pink);
+  }
   return c;
 }

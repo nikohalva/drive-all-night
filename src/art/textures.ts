@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
+import type { EscortKind, Tier } from '../config/escorts';
 import type { VehicleState } from '../sim/vehicle';
 import { drawText, textWidth } from './font';
 import { PinnedLru } from './lru';
 import {
   makeCanvas,
   paintCity,
+  paintEscort,
   paintGroundChunk,
   paintPirate,
   paintRig,
@@ -24,6 +26,11 @@ function addOnce(scene: Phaser.Scene, key: string, make: () => HTMLCanvasElement
 export function ensureRigTextures(scene: Phaser.Scene, v: VehicleState): string[] {
   const sig = rigSignature(v);
   return PHASES.map((phase) => addOnce(scene, `rig-${sig}-${phase}`, () => paintRig(v, phase)));
+}
+
+/** Texture keys for an escort's three tread phases. */
+export function ensureEscortTextures(scene: Phaser.Scene, kind: EscortKind, tier: Tier): string[] {
+  return PHASES.map((phase) => addOnce(scene, `escort-${kind}-${tier}-${phase}`, () => paintEscort(kind, tier, phase)));
 }
 
 export function ensurePirateTexture(scene: Phaser.Scene, level: number): string {

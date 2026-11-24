@@ -98,20 +98,24 @@ export function vehicleStats(v: VehicleState): VehicleStats {
 }
 
 /** Burn fuel for `seconds` at `throttle` (-1..1); bigger hulls burn more. */
-export function burnFuel(v: VehicleState, throttle: number, seconds: number): VehicleState {
-  const burn = BALANCE.FUEL_PER_SECOND * Math.abs(throttle) * HULLS[v.hullId].tier * seconds;
+export function burnFuel(v: VehicleState, throttle: number, seconds: number, extraPerSecond = 0): VehicleState {
+  const burn = (BALANCE.FUEL_PER_SECOND * HULLS[v.hullId].tier + extraPerSecond) * Math.abs(throttle) * seconds;
   return { ...v, fuel: Math.max(0, v.fuel - burn) };
 }
 
-export function addCargo(v: VehicleState, amount: number): { v: VehicleState; added: number } {
-  const room = Math.max(0, vehicleStats(v).cargoCap - v.cargo);
+export function addCargo(
+  v: VehicleState,
+  amount: number,
+  cargoCap = vehicleStats(v).cargoCap,
+): { v: VehicleState; added: number } {
+  const room = Math.max(0, cargoCap - v.cargo);
   const added = Math.max(0, Math.min(amount, room));
   return { v: { ...v, cargo: v.cargo + added }, added };
 }
 
 /** Move as much cargo as fits into the fuel tank. */
-export function transferToTank(v: VehicleState): VehicleState {
-  const room = Math.max(0, vehicleStats(v).tankCap - v.fuel);
+export function transferToTank(v: VehicleState, tankCap = vehicleStats(v).tankCap): VehicleState {
+  const room = Math.max(0, tankCap - v.fuel);
   const moved = Math.min(room, v.cargo);
   return { ...v, fuel: v.fuel + moved, cargo: v.cargo - moved };
 }

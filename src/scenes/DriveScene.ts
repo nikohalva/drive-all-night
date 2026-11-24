@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CITY_DOCK_Y, CITY_H, CITY_W, rigLayout, rigSignature } from '../art/painters';
-import { ensureCityTexture, ensureRigTextures } from '../art/textures';
+import { ensureCityTexture, ensureEscortTextures, ensureRigTextures } from '../art/textures';
 import { BALANCE } from '../config/balance';
 import { CITIES, CITY_BY_ID, type CityId } from '../config/cities';
 import {
@@ -12,7 +12,9 @@ import {
   ui,
   type DestroyReason,
 } from '../game/session';
+import { caravanStats, isWrecked } from '../sim/caravan';
 import { advance } from '../sim/clock';
+import { Convoy } from '../sim/convoy';
 import { forwardSpeed, stepDriving, type DriveEnv, type Kinematics } from '../sim/driving';
 import { newGame } from '../sim/game-state';
 import { collect } from '../sim/particles';
@@ -41,6 +43,8 @@ type CitySpot = { id: CityId; x: number; y: number };
 
 /** Pixels of ground travelled per tread animation frame. */
 const TREAD_STEP = 2.5;
+/** Gap between vehicles in the convoy, in px. */
+const CONVOY_SPACING = 34;
 
 /** The real-time driving scene: world, Particle X, sun hazards and the rig. */
 export class DriveScene extends Phaser.Scene {
@@ -67,6 +71,10 @@ export class DriveScene extends Phaser.Scene {
   private restarting = false;
   private rigSig = '';
   private rigTextures: string[] = [];
+  private convoy = new Convoy();
+  private escortSprites = new Map<number, Phaser.GameObjects.Image>();
+  /** Where each escort is on the road this frame (by escort id). */
+  private escortSpots = new Map<number, { x: number; y: number; heading: number }>();
 
   constructor() {
     super('drive');
@@ -96,6 +104,10 @@ export class DriveScene extends Phaser.Scene {
       this.cities.set(c.id, img.setTint(c.tint));
     }
     this.rig = this.add.image(0, 0, ensureRigTextures(this, s.vehicle)[0]).setDepth(10);
+    this.convoy = new Convoy();
+    this.convoy.reset(this.k.x, this.k.y);
+    this.escortSprites = new Map();
+    this.escortSpots = new Map();
     this.lighting = new Lighting(this);
     this.pirates = new PiratesMap(this, makeRng(randomSeed()));
     this.grace = new Grace();
@@ -129,6 +141,7 @@ export class DriveScene extends Phaser.Scene {
     const tNew = advance(prev.t, delta, this.frozen);
     const dt = tNew - prev.t;
     const stats = vehicleStats(prev.vehicle);
+    const caravan = caravanStats(prev);
     const broken = isBroken(prev.vehicle);
     const k = this.k;
 
@@ -147,28 +160,35 @@ export class DriveScene extends Phaser.Scene {
     const steer = canDrive ? (this.isDown(this.cursors.right, this.keys.D) ? 1 : 0) - (this.isDown(this.cursors.left, this.keys.A) ? 1 : 0) : 0;
 
     if (dt > 0) {
-      this.k = stepDriving(k, { throttle, steer }, dt, { topSpeed: stats.topSpeed, accel: stats.accel }, env);
+      this.k = stepDriving(k, { throttle, steer }, dt, { topSpeed: caravan.topSpeed, accel: stats.accel }, env);
       this.odometer += forwardSpeed(this.k) * dt;
     }
     const nk = this.k;
+    this.convoy.record(nk.x, nk.y);
+    this.escortSpots = new Map(
+      this.convoy.followers(prev.caravan.length, CONVOY_SPACING).map((f, i) => [prev.caravan[i].id, f]),
+    );
 
     let vehicle = prev.vehicle;
-    if (dt > 0 && throttle !== 0) vehicle = burnFuel(vehicle, throttle, dt);
+    if (dt > 0 && throttle !== 0) vehicle = burnFuel(vehicle, throttle, dt, caravan.fuelBurnExtra);
 
-    if (!this.frozen && Phaser.Input.Keyboard.JustDown(this.keys.F)) vehicle = transferToTank(vehicle);
+    if (!this.frozen && Phaser.Input.Keyboard.JustDown(this.keys.F)) vehicle = transferToTank(vehicle, caravan.tankCap);
 
-    if (dt > 0 && vehicle.cargo < stats.cargoCap) {
+    if (dt > 0 && vehicle.cargo < caravan.cargoCap) {
       const layout = rigLayout(vehicle.hullId);
       const back = layout.rearY - layout.pivotY;
-      const got = collect(
-        prev.seed,
-        getDepletion(),
-        nk.x - Math.cos(nk.heading) * back,
-        nk.y - Math.sin(nk.heading) * back,
-        stats.collectRadius,
-        tNew,
-      );
-      if (got > 0) vehicle = addCargo(vehicle, got).v;
+      // the lead sweeps behind itself; every working collector sweeps where it rolls
+      const sweeps = [
+        { x: nk.x - Math.cos(nk.heading) * back, y: nk.y - Math.sin(nk.heading) * back, r: stats.collectRadius },
+        ...caravan.collectors.flatMap((c) => {
+          const spot = this.escortSpots.get(c.id);
+          return spot ? [{ x: spot.x, y: spot.y, r: c.radius }] : [];
+        }),
+      ];
+      for (const sweep of sweeps) {
+        const got = collect(prev.seed, getDepletion(), sweep.x, sweep.y, sweep.r, tNew);
+        if (got > 0) vehicle = addCargo(vehicle, got, caravan.cargoCap).v;
+      }
     }
     if (Math.floor(tNew) !== Math.floor(prev.t)) getDepletion().prune(tNew);
 
@@ -184,7 +204,7 @@ export class DriveScene extends Phaser.Scene {
     ui.dockName = dock ? CITY_BY_ID[dock.id].name : null;
     ui.scorching = zone === 'scorch';
     ui.broken = isBroken(vehicle);
-    ui.fuelHint = vehicle.fuel < stats.tankCap * 0.3 && vehicle.cargo > 0;
+    ui.fuelHint = vehicle.fuel < caravan.tankCap * 0.3 && vehicle.cargo > 0;
     if (zone === 'dawn' && !this.frozen) this.handleDestroyed('dawn');
 
     const dockPressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
@@ -213,6 +233,31 @@ export class DriveScene extends Phaser.Scene {
     this.draw(time, dt, tNew, vehicle, zone, cities);
   }
 
+  /** Escort sprites follow the convoy positions; wrecked ones are towed, dark and dim. */
+  private drawEscorts(phase: number): void {
+    const caravan = getState().caravan;
+    const ids = new Set(caravan.map((e) => e.id));
+    for (const [id, img] of this.escortSprites) {
+      if (!ids.has(id)) {
+        img.destroy();
+        this.escortSprites.delete(id);
+      }
+    }
+    for (const e of caravan) {
+      const spot = this.escortSpots.get(e.id);
+      if (!spot) continue;
+      const key = ensureEscortTextures(this, e.kind, e.tier)[isWrecked(e) ? 0 : phase];
+      let img = this.escortSprites.get(e.id);
+      if (!img) {
+        img = this.add.image(0, 0, key).setDepth(9);
+        this.escortSprites.set(e.id, img);
+      }
+      img.setTexture(key).setPosition(spot.x, spot.y).setRotation(spot.heading + Math.PI / 2);
+      if (isWrecked(e)) img.setTint(0x555566).setAlpha(0.8);
+      else img.clearTint().setAlpha(1);
+    }
+  }
+
   private isDown(a: Phaser.Input.Keyboard.Key, b: Phaser.Input.Keyboard.Key): boolean {
     return a.isDown || b.isDown;
   }
@@ -237,6 +282,7 @@ export class DriveScene extends Phaser.Scene {
     this.rig.setTexture(this.rigTextures[phase]);
     this.rig.setPosition(k.x, k.y).setRotation(k.heading + Math.PI / 2);
     for (const c of cities) this.cities.get(c.id)?.setPosition(c.x, c.y);
+    this.drawEscorts(phase);
 
     const scrollX = Math.round(k.x - RIG_SCREEN_X);
     const scrollY = Math.round(k.y - RIG_SCREEN_Y);
@@ -282,6 +328,7 @@ export class DriveScene extends Phaser.Scene {
   private onCityDone(): void {
     const p = getState().player;
     this.k = { x: p.x, y: p.y, heading: p.heading, vx: 0, vy: 0 };
+    this.convoy.reset(p.x, p.y);
     this.grace.start();
     this.frozen = false;
   }

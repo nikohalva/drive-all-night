@@ -2,6 +2,7 @@ import { BALANCE } from '../config/balance';
 import type { GameState } from './game-state';
 import type { Rng } from './rng';
 import { HULLS } from '../config/catalog';
+import { caravanStats } from './caravan';
 import { vehicleStats } from './vehicle';
 import { nearestCity, type Zone } from './world';
 
@@ -51,10 +52,11 @@ export function rollRescue(
 export function rescueFuel(s: GameState): number {
   const city = nearestCity(s.player.x, s.player.y, s.t);
   const distance = Math.hypot(city.x - s.player.x, city.y - s.player.y);
-  const stats = vehicleStats(s.vehicle);
-  const closing = Math.max(10, stats.topSpeed - BALANCE.SUN_SPEED);
-  const needed = (distance / closing) * BALANCE.FUEL_PER_SECOND * HULLS[s.vehicle.hullId].tier * 1.1;
-  return Math.min(stats.tankCap, Math.max(BALANCE.RESCUE_FUEL, needed));
+  const caravan = caravanStats(s);
+  const closing = Math.max(10, caravan.topSpeed - BALANCE.SUN_SPEED);
+  const burn = BALANCE.FUEL_PER_SECOND * HULLS[s.vehicle.hullId].tier + caravan.fuelBurnExtra;
+  const needed = (distance / closing) * burn * 1.1;
+  return Math.min(caravan.tankCap, Math.max(BALANCE.RESCUE_FUEL, needed));
 }
 
 /** Fold a rescue outcome into the game state. A destroyed vehicle is the caller's to reload. */

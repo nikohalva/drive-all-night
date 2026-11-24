@@ -5,6 +5,7 @@ import { NIGHT_LEN } from '../config/balance';
 import { VIEW } from '../config/view';
 import { getState, ui } from '../game/session';
 import { planetTimeLabel } from '../sim/clock';
+import { caravanStats } from '../sim/caravan';
 import { vehicleStats } from '../sim/vehicle';
 import { CITIES } from '../config/cities';
 import { behindSunset, cityPositions, secondsUntilDawn, zoneAt } from '../sim/world';
@@ -21,6 +22,8 @@ interface HudData {
   cargo: number;
   hull: number;
   credits: number;
+  escorts: number;
+  wrecked: number;
   debt: number;
   mapPlayer: number;
   mapCities: number[];
@@ -66,6 +69,7 @@ export class HudScene extends Phaser.Scene {
   private read(time: number): HudData {
     const s = getState();
     const stats = vehicleStats(s.vehicle);
+    const caravan = caravanStats(s);
     const y = s.player.y;
     const zone = zoneAt(y, s.t);
     const b = behindSunset(y, s.t);
@@ -73,8 +77,10 @@ export class HudScene extends Phaser.Scene {
     const mapCities = cityPositions(s.t).map((c) => 1 - behindSunset(c.y, s.t) / NIGHT_LEN);
     const dawnIn = secondsUntilDawn(y, s.t);
     return {
-      fuel: Math.ceil(clamp01(s.vehicle.fuel / stats.tankCap) * SEGMENTS),
-      cargo: Math.ceil(clamp01(s.vehicle.cargo / stats.cargoCap) * SEGMENTS),
+      fuel: Math.ceil(clamp01(s.vehicle.fuel / caravan.tankCap) * SEGMENTS),
+      cargo: Math.ceil(clamp01(s.vehicle.cargo / caravan.cargoCap) * SEGMENTS),
+      escorts: caravan.escorts,
+      wrecked: caravan.wrecked,
       hull: Math.ceil(clamp01(s.vehicle.hp / stats.maxHp) * SEGMENTS),
       credits: Math.floor(s.credits),
       debt: Math.floor(s.debt),
@@ -122,7 +128,15 @@ export class HudScene extends Phaser.Scene {
     x = this.bar(ctx, x + 10, 'HULL', d.hull, PAL.pink);
     const cr = `CR ${d.credits}`;
     drawText(ctx, cr, 6, BAR_Y + 14, PAL.white);
-    if (d.debt > 0) drawText(ctx, `DEBT ${d.debt}`, 6 + textWidth(cr) + 8, BAR_Y + 14, PAL.red);
+    let infoX = 6 + textWidth(cr) + 8;
+    if (d.debt > 0) {
+      drawText(ctx, `DEBT ${d.debt}`, infoX, BAR_Y + 14, PAL.red);
+      infoX += textWidth(`DEBT ${d.debt}`) + 8;
+    }
+    if (d.escorts > 0) {
+      drawText(ctx, `CARAVAN ${d.escorts}`, infoX, BAR_Y + 14, PAL.cyanPale);
+      if (d.wrecked > 0) drawText(ctx, `(${d.wrecked} WRECKED)`, infoX + textWidth(`CARAVAN ${d.escorts}`) + 4, BAR_Y + 14, PAL.red);
+    }
 
     // strip map: dawn on the left, sunset on the right
     for (let i = 0; i < MAP_W; i++) {

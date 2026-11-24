@@ -1,9 +1,10 @@
 import { HULLS, SLOT_TYPES } from '../config/catalog';
+import { ESCORT_KINDS } from '../config/escorts';
 import type { GameState } from './game-state';
 
 export const SAVE_KEY = 'drive-all-night/save-v1';
 /** The save format this build writes; older formats are upgraded on load. */
-export const CURRENT_SAVE_VERSION = 2;
+export const CURRENT_SAVE_VERSION = 3;
 
 export interface KV {
   getItem(k: string): string | null;
@@ -30,6 +31,11 @@ const isNum = (x: unknown): boolean => typeof x === 'number' && Number.isFinite(
 function looksLikeGameState(x: unknown): x is GameState {
   if (!isObj(x) || x.version !== CURRENT_SAVE_VERSION) return false;
   if (!Array.isArray(x.known) || !x.known.every((id) => typeof id === 'string')) return false;
+  if (!isNum(x.nextEscortId) || !Array.isArray(x.caravan)) return false;
+  for (const e of x.caravan) {
+    if (!isObj(e) || !isNum(e.id) || !isNum(e.hp) || ![1, 2, 3].includes(e.tier as number)) return false;
+    if (!ESCORT_KINDS.includes(e.kind as never)) return false;
+  }
   if (!isNum(x.seed) || !isNum(x.t) || !isNum(x.credits) || !isNum(x.debt)) return false;
 
   const p = x.player;
@@ -55,6 +61,7 @@ function upgrade(x: unknown): unknown {
   if (!isObj(x) || typeof x.version !== 'number') return x;
   let v: Record<string, unknown> = { ...x };
   if (v.version === 1) v = { ...v, version: 2, known: [] };
+  if (v.version === 2) v = { ...v, version: 3, caravan: [], nextEscortId: 1 };
   return v;
 }
 
