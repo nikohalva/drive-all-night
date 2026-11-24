@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { CITY_DOCK_Y, CITY_H, CITY_W, rigLayout, rigSignature } from '../art/painters';
 import { ensureCityTexture, ensureRigTextures } from '../art/textures';
 import { BALANCE } from '../config/balance';
+import { CITIES, CITY_BY_ID, type CityId } from '../config/cities';
 import {
   getDepletion,
   getState,
@@ -22,7 +23,7 @@ import { loadGame } from '../sim/save';
 import { TERRAIN_SPEED, isPassable, terrainAt } from '../sim/terrain';
 import { addCargo, burnFuel, isBroken, transferToTank, vehicleStats } from '../sim/vehicle';
 import {
-  cityPosition,
+  cityPositions,
   heatDps,
   nearestCopy,
   scorchDepth,
@@ -35,7 +36,8 @@ import { ParticleLayer } from './drive/particles-layer';
 import { PiratesMap } from './drive/pirates-map';
 import { RescueFlow } from './drive/rescue-flow';
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'F' | 'E' | 'H', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'F' | 'E' | 'H' | 'M', Phaser.Input.Keyboard.Key>;
+type CitySpot = { id: CityId; x: number; y: number };
 
 /** Pixels of ground travelled per tread animation frame. */
 const TREAD_STEP = 2.5;
@@ -49,7 +51,9 @@ export class DriveScene extends Phaser.Scene {
   private rescue!: RescueFlow;
   private grace = new Grace();
   private rig!: Phaser.GameObjects.Image;
-  private city!: Phaser.GameObjects.Image;
+  private cities = new Map<CityId, Phaser.GameObjects.Image>();
+  /** The city whose dock the rig is beside, if any. */
+  private dockCity: CityId | null = null;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: KeyMap;
 
@@ -84,7 +88,11 @@ export class DriveScene extends Phaser.Scene {
     this.ground = new GroundLayer(this, s.seed);
     this.ground.prime(Math.round(this.k.x - RIG_SCREEN_X), Math.round(this.k.y - RIG_SCREEN_Y));
     this.sparks = new ParticleLayer(this, s.seed);
-    this.city = this.add.image(0, 0, ensureCityTexture(this)).setOrigin(1, CITY_DOCK_Y / CITY_H).setDepth(3);
+    this.cities = new Map();
+    for (const c of CITIES) {
+      const img = this.add.image(0, 0, ensureCityTexture(this)).setOrigin(1, CITY_DOCK_Y / CITY_H).setDepth(3);
+      this.cities.set(c.id, img.setTint(c.tint));
+    }
     this.rig = this.add.image(0, 0, ensureRigTextures(this, s.vehicle)[0]).setDepth(10);
     this.lighting = new Lighting(this);
     this.pirates = new PiratesMap(this, makeRng(randomSeed()));
@@ -97,11 +105,13 @@ export class DriveScene extends Phaser.Scene {
     this.events.on('battle-done', this.onBattleDone, this);
     this.events.off('city-done');
     this.events.on('city-done', this.onCityDone, this);
+    this.events.off('map-done');
+    this.events.on('map-done', () => this.setFrozen(false));
 
     const kb = this.input.keyboard;
     if (!kb) throw new Error('keyboard input is required');
     this.cursors = kb.createCursorKeys();
-    this.keys = kb.addKeys('W,A,S,D,F,E,H') as KeyMap;
+    this.keys = kb.addKeys('W,A,S,D,F,E,H,M') as KeyMap;
 
     hooks.onDestroyed = (reason) => this.handleDestroyed(reason);
     if (!this.scene.isActive('hud')) this.scene.launch('hud');
@@ -116,12 +126,10 @@ export class DriveScene extends Phaser.Scene {
     const broken = isBroken(prev.vehicle);
     const k = this.k;
 
-    // the city drifts along with the night; place the copy nearest the rig
-    const cityPos = cityPosition(tNew);
-    const cityY = nearestCopy(cityPos.y, k.y);
-    const cityTop = cityY - CITY_DOCK_Y;
+    // the cities drift along with the night; place the copy of each nearest the rig
+    const cities: CitySpot[] = cityPositions(tNew).map((c) => ({ ...c, y: nearestCopy(c.y, k.y) }));
     const inCity = (x: number, y: number): boolean =>
-      x >= cityPos.x - CITY_W && x <= cityPos.x && y >= cityTop && y <= cityTop + CITY_H;
+      cities.some((c) => x >= c.x - CITY_W && x <= c.x && y >= c.y - CITY_DOCK_Y && y <= c.y - CITY_DOCK_Y + CITY_H);
     const startedInCity = inCity(k.x, k.y);
     const env: DriveEnv = {
       blocked: (x, y) => !isPassable(terrainAt(prev.seed, x, y)) || (!startedInCity && inCity(x, y)),
@@ -164,8 +172,10 @@ export class DriveScene extends Phaser.Scene {
     setState({ ...prev, t: tNew, player: { x: nk.x, y: nk.y, heading: nk.heading }, vehicle });
 
     const zone = zoneAt(nk.y, tNew);
-    const dist = Math.hypot(nk.x - cityPos.x, nk.y - cityY);
-    ui.nearDock = dist <= BALANCE.DOCK_RADIUS;
+    const dock = cities.find((c) => Math.hypot(nk.x - c.x, nk.y - c.y) <= BALANCE.DOCK_RADIUS);
+    this.dockCity = dock ? dock.id : null;
+    ui.nearDock = !!dock;
+    ui.dockName = dock ? CITY_BY_ID[dock.id].name : null;
     ui.scorching = zone === 'scorch';
     ui.broken = isBroken(vehicle);
     ui.fuelHint = vehicle.fuel < stats.tankCap * 0.3 && vehicle.cargo > 0;
@@ -173,6 +183,8 @@ export class DriveScene extends Phaser.Scene {
 
     const dockPressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
     if (dockPressed && ui.nearDock && !this.frozen && !this.destroyedPending) this.enterCity();
+    const mapPressed = Phaser.Input.Keyboard.JustDown(this.keys.M);
+    if (mapPressed && !this.frozen && !this.destroyedPending) this.openMap();
     const helpPressed = Phaser.Input.Keyboard.JustDown(this.keys.H);
     if (helpPressed && ui.broken && !this.frozen && !this.destroyedPending && !this.rescue.active) this.rescue.begin();
 
@@ -192,7 +204,7 @@ export class DriveScene extends Phaser.Scene {
       if (contact) this.startBattle(contact);
     }
 
-    this.draw(time, dt, tNew, vehicle, zone, cityPos.x, cityY);
+    this.draw(time, dt, tNew, vehicle, zone, cities);
   }
 
   private isDown(a: Phaser.Input.Keyboard.Key, b: Phaser.Input.Keyboard.Key): boolean {
@@ -205,8 +217,7 @@ export class DriveScene extends Phaser.Scene {
     t: number,
     vehicle: ReturnType<typeof getState>['vehicle'],
     zone: ReturnType<typeof zoneAt>,
-    cityX: number,
-    cityY: number,
+    cities: CitySpot[],
   ): void {
     const k = this.k;
     const sig = rigSignature(vehicle);
@@ -219,7 +230,7 @@ export class DriveScene extends Phaser.Scene {
     const phase = Math.floor(Math.abs(this.odometer) / TREAD_STEP) % 3;
     this.rig.setTexture(this.rigTextures[phase]);
     this.rig.setPosition(k.x, k.y).setRotation(k.heading + Math.PI / 2);
-    this.city.setPosition(cityX, cityY);
+    for (const c of cities) this.cities.get(c.id)?.setPosition(c.x, c.y);
 
     const scrollX = Math.round(k.x - RIG_SCREEN_X);
     const scrollY = Math.round(k.y - RIG_SCREEN_Y);
@@ -251,7 +262,14 @@ export class DriveScene extends Phaser.Scene {
     this.frozen = true;
     this.k = { ...this.k, vx: 0, vy: 0 };
     this.pirates.clear();
-    this.scene.launch('city');
+    this.scene.launch('city', { cityId: this.dockCity });
+  }
+
+  /** Open the world map; the clock stops until it closes. */
+  private openMap(): void {
+    this.frozen = true;
+    this.k = { ...this.k, vx: 0, vy: 0 };
+    this.scene.launch('map');
   }
 
   /** Back from the city: the menu has placed the rig beside the dock. */

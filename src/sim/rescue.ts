@@ -3,7 +3,7 @@ import type { GameState } from './game-state';
 import type { Rng } from './rng';
 import { HULLS } from '../config/catalog';
 import { vehicleStats } from './vehicle';
-import { cityPosition, nearestCopy, type Zone } from './world';
+import { nearestCity, type Zone } from './world';
 
 export type RescueOutcome =
   | { type: 'rescued'; waitSeconds: number; fee: number }
@@ -49,9 +49,8 @@ export function rollRescue(
  * moving away with the night), never less than the minimum and never more than the tank holds.
  */
 export function rescueFuel(s: GameState): number {
-  const city = cityPosition(s.t);
-  const cityY = nearestCopy(city.y, s.player.y);
-  const distance = Math.hypot(city.x - s.player.x, cityY - s.player.y);
+  const city = nearestCity(s.player.x, s.player.y, s.t);
+  const distance = Math.hypot(city.x - s.player.x, city.y - s.player.y);
   const stats = vehicleStats(s.vehicle);
   const closing = Math.max(10, stats.topSpeed - BALANCE.SUN_SPEED);
   const needed = (distance / closing) * BALANCE.FUEL_PER_SECOND * HULLS[s.vehicle.hullId].tier * 1.1;

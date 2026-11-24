@@ -1,5 +1,5 @@
 import { newGame } from '../src/sim/game-state';
-import { deserialize, loadGame, SAVE_KEY, saveGame, serialize, type KV } from '../src/sim/save';
+import { CURRENT_SAVE_VERSION, deserialize, loadGame, SAVE_KEY, saveGame, serialize, type KV } from '../src/sim/save';
 
 const mem = (): KV => {
   const m = new Map<string, string>();
@@ -63,4 +63,21 @@ test('a missing or corrupt stored save loads as null', () => {
   expect(loadGame(kv)).toBeNull();
   kv.setItem(SAVE_KEY, '{oops');
   expect(loadGame(kv)).toBeNull();
+});
+
+test('a version-1 save is upgraded, not thrown away', () => {
+  const v2 = newGame(9);
+  const v1 = JSON.parse(serialize(v2));
+  v1.version = 1;
+  delete v1.known;
+  const loaded = deserialize(JSON.stringify(v1));
+  expect(loaded).not.toBeNull();
+  expect(loaded?.version).toBe(CURRENT_SAVE_VERSION);
+  expect(loaded?.known).toEqual([]);
+  expect(loaded?.vehicle).toEqual(v2.vehicle);
+});
+
+test('saves from a newer, unknown version load as null', () => {
+  const future = { ...JSON.parse(serialize(newGame(1))), version: 999 };
+  expect(deserialize(JSON.stringify(future))).toBeNull();
 });

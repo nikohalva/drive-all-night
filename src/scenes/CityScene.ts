@@ -3,7 +3,6 @@ import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
 import { rigSignature } from '../art/painters';
 import { ensureRigTextures } from '../art/textures';
-import { BALANCE } from '../config/balance';
 import { VIEW } from '../config/view';
 import { getState, setState } from '../game/session';
 import {
@@ -21,7 +20,8 @@ import { hash2 } from '../sim/rng';
 import { saveGame } from '../sim/save';
 import { compatibleOwned, cycleFit, garageRows, shopRows } from '../sim/shop';
 import { vehicleStats } from '../sim/vehicle';
-import { cityPosition, nearestCopy } from '../sim/world';
+import { CITY_BY_ID, START_CITY, type CityDef, type CityId } from '../config/cities';
+import { cityPos, nearestCopy } from '../sim/world';
 import type { HullId } from '../config/catalog';
 
 const W = VIEW.W;
@@ -64,9 +64,14 @@ export class CityScene extends Phaser.Scene {
   private lastSig = '';
   private rig!: Phaser.GameObjects.Image;
   private rigSig = '';
+  private city: CityDef = CITY_BY_ID[START_CITY];
 
   constructor() {
     super('city');
+  }
+
+  init(data: { cityId?: CityId | null }): void {
+    this.city = CITY_BY_ID[data.cityId ?? START_CITY] ?? CITY_BY_ID[START_CITY];
   }
 
   create(): void {
@@ -157,15 +162,19 @@ export class CityScene extends Phaser.Scene {
     const cursor = this.cursors[this.tab];
     switch (this.current()) {
       case 'SELL': {
-        const proceeds = Math.floor(s.vehicle.cargo * BALANCE.X_SELL_PRICE);
-        this.apply(sellCargo(s), `SOLD CARGO FOR ${proceeds} CR`);
+        const proceeds = Math.floor(s.vehicle.cargo * this.city.sellPrice);
+        this.apply(sellCargo(s, this.city), `SOLD CARGO FOR ${proceeds} CR`);
         break;
       }
       case 'SHOP': {
-        const row = shopRows(s)[cursor];
+        const row = shopRows(s, this.city)[cursor];
         if (!row) break;
         const result =
-          row.kind === 'hull' ? buyHull(s, row.id as HullId) : row.kind === 'part' ? buyPart(s, row.id) : buyRepairKit(s);
+          row.kind === 'hull'
+            ? buyHull(s, row.id as HullId, this.city)
+            : row.kind === 'part'
+              ? buyPart(s, row.id, this.city)
+              : buyRepairKit(s);
         if (this.apply(result, `BOUGHT ${row.name}`)) this.afterPurchase();
         break;
       }
@@ -181,8 +190,8 @@ export class CityScene extends Phaser.Scene {
         break;
       }
       case 'SERVICES':
-        if (cursor === 0) this.apply(repairFull(s), 'HULL REPAIRED');
-        else this.apply(refuelFull(s), 'TANK REFUELLED');
+        if (cursor === 0) this.apply(repairFull(s, this.city), 'HULL REPAIRED');
+        else this.apply(refuelFull(s, this.city), 'TANK REFUELLED');
         break;
       case 'SAVE':
         if (saveGame(getState())) this.say('GAME SAVED');
@@ -212,7 +221,7 @@ export class CityScene extends Phaser.Scene {
   private leave(): void {
     if (this.locked) return;
     const s = getState();
-    const city = cityPosition(s.t);
+    const city = cityPos(this.city.id, s.t);
     setState({
       ...s,
       player: { x: city.x + 40, y: nearestCopy(city.y, s.player.y), heading: -Math.PI / 2 },
@@ -227,19 +236,19 @@ export class CityScene extends Phaser.Scene {
     const s = getState();
     switch (this.current()) {
       case 'SELL': {
-        const value = Math.floor(s.vehicle.cargo * BALANCE.X_SELL_PRICE);
+        const value = Math.floor(s.vehicle.cargo * this.city.sellPrice);
         return [
           {
             text: 'SELL ALL CARGO',
             right: `${value} CR`,
             color: PAL.amber,
             dim: s.vehicle.cargo <= 0,
-            detail: `CARGO ${s.vehicle.cargo.toFixed(1)} X AT ${BALANCE.X_SELL_PRICE} CR EACH${s.debt > 0 ? '. DEBT IS PAID FIRST' : ''}`,
+            detail: `CARGO ${s.vehicle.cargo.toFixed(1)} X AT ${this.city.sellPrice} CR EACH${s.debt > 0 ? '. DEBT IS PAID FIRST' : ''}`,
           },
         ];
       }
       case 'SHOP':
-        return shopRows(s).map((r) => ({
+        return shopRows(s, this.city).map((r) => ({
           text: r.name,
           right: `${r.price} CR`,
           color: r.kind === 'hull' ? PAL.pink : r.kind === 'kit' ? PAL.cyanPale : PAL.amber,
@@ -257,8 +266,8 @@ export class CityScene extends Phaser.Scene {
         }));
       case 'SERVICES': {
         const stats = vehicleStats(s.vehicle);
-        const repairCost = Math.ceil((stats.maxHp - s.vehicle.hp) * BALANCE.REPAIR_COST_PER_HP);
-        const fuelCost = Math.ceil((stats.tankCap - s.vehicle.fuel) * BALANCE.X_BUY_PRICE);
+        const repairCost = Math.ceil((stats.maxHp - s.vehicle.hp) * this.city.repairPrice);
+        const fuelCost = Math.ceil((stats.tankCap - s.vehicle.fuel) * this.city.fuelPrice);
         return [
           {
             text: 'REPAIR HULL',
@@ -350,7 +359,7 @@ export class CityScene extends Phaser.Scene {
   private drawUi(ctx: CanvasRenderingContext2D, s: GameState): void {
     // header
     this.panel(ctx, 0, 0, W, 22);
-    this.text(ctx, 'MEGA CITY DOCK', 6, 5, PAL.pink, 2);
+    this.text(ctx, this.city.name, 6, 5, this.city.color, 2);
     const cr = `CR ${Math.floor(s.credits)}`;
     this.text(ctx, cr, W - textWidth(cr) * 2 - 8, 5, PAL.amber, 2);
     if (s.debt > 0) {

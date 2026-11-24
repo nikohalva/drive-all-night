@@ -2,6 +2,8 @@ import { HULLS, SLOT_TYPES } from '../config/catalog';
 import type { GameState } from './game-state';
 
 export const SAVE_KEY = 'drive-all-night/save-v1';
+/** The save format this build writes; older formats are upgraded on load. */
+export const CURRENT_SAVE_VERSION = 2;
 
 export interface KV {
   getItem(k: string): string | null;
@@ -26,7 +28,8 @@ const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object
 const isNum = (x: unknown): boolean => typeof x === 'number' && Number.isFinite(x);
 
 function looksLikeGameState(x: unknown): x is GameState {
-  if (!isObj(x) || x.version !== 1) return false;
+  if (!isObj(x) || x.version !== CURRENT_SAVE_VERSION) return false;
+  if (!Array.isArray(x.known) || !x.known.every((id) => typeof id === 'string')) return false;
   if (!isNum(x.seed) || !isNum(x.t) || !isNum(x.credits) || !isNum(x.debt)) return false;
 
   const p = x.player;
@@ -47,11 +50,19 @@ function looksLikeGameState(x: unknown): x is GameState {
   return ['easyStartOver', 'firstRescueUsed', 'won', 'victoryShown'].every((k) => typeof f[k] === 'boolean');
 }
 
+/** Bring an older save up to the current format; leaves anything unrecognised alone. */
+function upgrade(x: unknown): unknown {
+  if (!isObj(x) || typeof x.version !== 'number') return x;
+  let v: Record<string, unknown> = { ...x };
+  if (v.version === 1) v = { ...v, version: 2, known: [] };
+  return v;
+}
+
 /** Parse a stored save; anything missing, corrupt or from another version is null. */
 export function deserialize(raw: string | null): GameState | null {
   if (!raw) return null;
   try {
-    const parsed: unknown = JSON.parse(raw);
+    const parsed = upgrade(JSON.parse(raw));
     return looksLikeGameState(parsed) ? parsed : null;
   } catch {
     return null;

@@ -1,4 +1,5 @@
 import { BALANCE, NIGHT_LEN } from '../config/balance';
+import { CITIES, CITY_BY_ID, START_CITY, type CityId } from '../config/cities';
 
 export type Zone = 'sunset' | 'deep' | 'predawn' | 'scorch' | 'dawn';
 
@@ -62,9 +63,32 @@ export function nearestCopy(y: number, refY: number): number {
   return y + L * Math.round((refY - y) / L);
 }
 
+/** Where city `id` is at world time t (it keeps its distance behind the sunset line). */
+export function cityPos(id: CityId, t: number): { id: CityId; x: number; y: number } {
+  const def = CITY_BY_ID[id];
+  return { id, x: def.laneX, y: wrapAlong(sunsetY(t) + def.behindFrac * NIGHT_LEN) };
+}
+
+export function cityPositions(t: number): { id: CityId; x: number; y: number }[] {
+  return CITIES.map((c) => cityPos(c.id, t));
+}
+
+/** The city closest to (x, y), measured through the wrap; y is the copy nearest the point. */
+export function nearestCity(x: number, y: number, t: number): { id: CityId; x: number; y: number } {
+  let best = cityPositions(t)[0];
+  let bestD = Infinity;
+  for (const c of cityPositions(t)) {
+    const cy = nearestCopy(c.y, y);
+    const d = Math.hypot(c.x - x, cy - y);
+    if (d < bestD) {
+      bestD = d;
+      best = { ...c, y: cy };
+    }
+  }
+  return best;
+}
+
+/** The starting city's position (kept for code that only cares about one city). */
 export function cityPosition(t: number): { x: number; y: number } {
-  return {
-    x: BALANCE.WORLD_WIDTH / 2,
-    y: wrapAlong(sunsetY(t) + BALANCE.CITY_BEHIND_FRAC * NIGHT_LEN),
-  };
+  return cityPos(START_CITY, t);
 }

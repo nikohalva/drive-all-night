@@ -6,7 +6,8 @@ import { VIEW } from '../config/view';
 import { getState, ui } from '../game/session';
 import { planetTimeLabel } from '../sim/clock';
 import { vehicleStats } from '../sim/vehicle';
-import { behindSunset, cityPosition, secondsUntilDawn, zoneAt } from '../sim/world';
+import { CITIES } from '../config/cities';
+import { behindSunset, cityPositions, secondsUntilDawn, zoneAt } from '../sim/world';
 
 const W = VIEW.W;
 const H = VIEW.H;
@@ -22,7 +23,8 @@ interface HudData {
   credits: number;
   debt: number;
   mapPlayer: number;
-  mapCity: number;
+  mapCities: number[];
+  dockName: string | null;
   dawnLabel: string | null;
   scorching: boolean;
   broken: boolean;
@@ -68,7 +70,7 @@ export class HudScene extends Phaser.Scene {
     const zone = zoneAt(y, s.t);
     const b = behindSunset(y, s.t);
     const mapPlayer = b < NIGHT_LEN ? 1 - b / NIGHT_LEN : zone === 'scorch' ? 1 : 0;
-    const mapCity = 1 - behindSunset(cityPosition(s.t).y, s.t) / NIGHT_LEN;
+    const mapCities = cityPositions(s.t).map((c) => 1 - behindSunset(c.y, s.t) / NIGHT_LEN);
     const dawnIn = secondsUntilDawn(y, s.t);
     return {
       fuel: Math.ceil(clamp01(s.vehicle.fuel / stats.tankCap) * SEGMENTS),
@@ -77,7 +79,8 @@ export class HudScene extends Phaser.Scene {
       credits: Math.floor(s.credits),
       debt: Math.floor(s.debt),
       mapPlayer: Math.round(clamp01(mapPlayer) * (MAP_W - 1)),
-      mapCity: Math.round(clamp01(mapCity) * (MAP_W - 1)),
+      mapCities: mapCities.map((f) => Math.round(clamp01(f) * (MAP_W - 1))),
+      dockName: ui.dockName,
       dawnLabel: Number.isFinite(dawnIn) ? planetTimeLabel(dawnIn) : null,
       scorching: ui.scorching,
       broken: ui.broken,
@@ -129,9 +132,12 @@ export class HudScene extends Phaser.Scene {
     }
     drawText(ctx, 'D', MAP_X - 6, BAR_Y + 7, PAL.dawn);
     drawText(ctx, 'S', MAP_X + MAP_W + 3, BAR_Y + 7, '#ff8a3d');
-    ctx.fillStyle = PAL.amber;
-    ctx.fillRect(MAP_X + d.mapCity, BAR_Y + 7, 1, 6);
-    ctx.fillRect(MAP_X + d.mapCity - 1, BAR_Y + 9, 3, 2);
+    d.mapCities.forEach((m, i) => {
+      ctx.fillStyle = CITIES[i].color;
+      ctx.fillRect(MAP_X + m, BAR_Y + 7, 1, 6);
+      ctx.fillRect(MAP_X + m - 1, BAR_Y + 9, 3, 2);
+    });
+    drawText(ctx, 'M MAP', MAP_X - 34, BAR_Y + 14, '#7a6a9a');
     ctx.fillStyle = PAL.cyan;
     ctx.fillRect(MAP_X + d.mapPlayer - 1, BAR_Y + 4, 3, 1);
     ctx.fillRect(MAP_X + d.mapPlayer, BAR_Y + 5, 1, 4);
@@ -150,7 +156,7 @@ export class HudScene extends Phaser.Scene {
     if (d.scorching && d.blink) this.centered(ctx, 'SCORCHING!', 40, PAL.amber, 2);
     const prompts: string[] = [];
     if (d.broken) prompts.push('BROKEN DOWN  H: CALL FOR HELP');
-    if (d.nearDock) prompts.push('E: DOCK');
+    if (d.nearDock) prompts.push(`E: DOCK AT ${d.dockName ?? 'CITY'}`);
     if (d.fuelHint) prompts.push('F: FUEL FROM CARGO');
     prompts.forEach((p, i) => this.centered(ctx, p, H - 44 - i * 9, d.broken && i === 0 ? PAL.red : PAL.amber));
   }

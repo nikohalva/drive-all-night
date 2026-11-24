@@ -1,5 +1,5 @@
-import { BALANCE } from '../config/balance';
 import { HULLS, PARTS, REPAIR_KIT, SLOT_TYPES, type HullId, type SlotType } from '../config/catalog';
+import { CITY_BY_ID, START_CITY, type CityDef } from '../config/cities';
 import type { GameState } from './game-state';
 import { vehicleStats, type VehicleState } from './vehicle';
 
@@ -16,10 +16,15 @@ const withVehicle = (s: GameState, patch: Partial<VehicleState>): GameState => (
   vehicle: { ...s.vehicle, ...patch },
 });
 
+const HOME = CITY_BY_ID[START_CITY];
+
+/** A catalog price as charged by `city`. */
+export const cityPrice = (price: number, city: CityDef): number => Math.round(price * city.priceFactor);
+
 /** Sell all cargo; proceeds clear debt first, the rest becomes credits. */
-export function sellCargo(s: GameState): TxResult {
+export function sellCargo(s: GameState, city: CityDef = HOME): TxResult {
   if (s.vehicle.cargo <= 0) return fail('nothing');
-  const proceeds = Math.floor(s.vehicle.cargo * BALANCE.X_SELL_PRICE);
+  const proceeds = Math.floor(s.vehicle.cargo * city.sellPrice);
   const toDebt = Math.min(s.debt, proceeds);
   return done({
     ...withVehicle(s, { cargo: 0 }),
@@ -29,13 +34,14 @@ export function sellCargo(s: GameState): TxResult {
   });
 }
 
-export function buyPart(s: GameState, partId: string): TxResult {
+export function buyPart(s: GameState, partId: string, city: CityDef = HOME): TxResult {
   const part = PARTS[partId];
-  if (!part) return fail('nothing');
-  if (s.credits < part.price) return fail('credits');
+  if (!part || !city.stock.includes(partId)) return fail('nothing');
+  const price = cityPrice(part.price, city);
+  if (s.credits < price) return fail('credits');
   return done({
     ...withVehicle(s, { owned: [...s.vehicle.owned, partId] }),
-    credits: s.credits - part.price,
+    credits: s.credits - price,
   });
 }
 
@@ -75,10 +81,11 @@ export function unfitPart(s: GameState, slot: SlotType, index: number): TxResult
 }
 
 /** Buy a bigger hull. Fitted parts carry over; buying the largest hull wins. */
-export function buyHull(s: GameState, hullId: HullId): TxResult {
+export function buyHull(s: GameState, hullId: HullId, city: CityDef = HOME): TxResult {
   const hull = HULLS[hullId];
   if (hull.tier <= HULLS[s.vehicle.hullId].tier) return fail('nothing');
-  if (s.credits < hull.price) return fail('credits');
+  const price = cityPrice(hull.price, city);
+  if (s.credits < price) return fail('credits');
 
   const fitted = { ...s.vehicle.fitted };
   for (const slot of SLOT_TYPES) {
@@ -91,7 +98,7 @@ export function buyHull(s: GameState, hullId: HullId): TxResult {
   return done({
     ...s,
     vehicle: { ...next, hp: stats.maxHp, fuel: Math.min(next.fuel, stats.tankCap) },
-    credits: s.credits - hull.price,
+    credits: s.credits - price,
     flags: { ...s.flags, won: s.flags.won || hullId === 'juggernaut' },
   });
 }
@@ -105,33 +112,33 @@ export function buyRepairKit(s: GameState): TxResult {
 }
 
 /** Repair as much hull as the credits cover (all of it when affordable). */
-export function repairFull(s: GameState): TxResult {
+export function repairFull(s: GameState, city: CityDef = HOME): TxResult {
   const missing = vehicleStats(s.vehicle).maxHp - s.vehicle.hp;
   if (missing <= 0) return fail('nothing');
-  const fullCost = Math.ceil(missing * BALANCE.REPAIR_COST_PER_HP);
+  const fullCost = Math.ceil(missing * city.repairPrice);
   if (s.credits >= fullCost) {
     return done({ ...withVehicle(s, { hp: s.vehicle.hp + missing }), credits: s.credits - fullCost });
   }
-  const healed = Math.floor(s.credits / BALANCE.REPAIR_COST_PER_HP);
+  const healed = Math.floor(s.credits / city.repairPrice);
   if (healed <= 0) return fail('credits');
   return done({
     ...withVehicle(s, { hp: s.vehicle.hp + healed }),
-    credits: s.credits - Math.ceil(healed * BALANCE.REPAIR_COST_PER_HP),
+    credits: s.credits - Math.ceil(healed * city.repairPrice),
   });
 }
 
 /** Refuel as much as the credits cover (a full tank when affordable). */
-export function refuelFull(s: GameState): TxResult {
+export function refuelFull(s: GameState, city: CityDef = HOME): TxResult {
   const missing = vehicleStats(s.vehicle).tankCap - s.vehicle.fuel;
   if (missing <= 0) return fail('nothing');
-  const fullCost = Math.ceil(missing * BALANCE.X_BUY_PRICE);
+  const fullCost = Math.ceil(missing * city.fuelPrice);
   if (s.credits >= fullCost) {
     return done({ ...withVehicle(s, { fuel: s.vehicle.fuel + missing }), credits: s.credits - fullCost });
   }
-  const units = Math.floor(s.credits / BALANCE.X_BUY_PRICE);
+  const units = Math.floor(s.credits / city.fuelPrice);
   if (units <= 0) return fail('credits');
   return done({
     ...withVehicle(s, { fuel: s.vehicle.fuel + units }),
-    credits: s.credits - Math.ceil(units * BALANCE.X_BUY_PRICE),
+    credits: s.credits - Math.ceil(units * city.fuelPrice),
   });
 }

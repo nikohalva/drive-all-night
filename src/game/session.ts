@@ -26,6 +26,8 @@ export const hooks: { onDestroyed: (reason: DestroyReason) => void } = {
 /** What the driving scene tells the HUD each frame. */
 export interface UiInfo {
   nearDock: boolean;
+  /** Name of the city whose dock the rig is beside. */
+  dockName: string | null;
   scorching: boolean;
   broken: boolean;
   /** Fuel is low and cargo could top it up. */
@@ -34,4 +36,4 @@ export interface UiInfo {
   message: string | null;
 }
 
-export const ui: UiInfo = { nearDock: false, scorching: false, broken: false, fuelHint: false, message: null };
+export const ui: UiInfo = { nearDock: false, dockName: null, scorching: false, broken: false, fuelHint: false, message: null };

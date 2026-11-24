@@ -1,5 +1,6 @@
 import { HULLS, PARTS, REPAIR_KIT, SLOT_TYPES, type Part, type SlotType } from '../config/catalog';
-import { fitPart, type TxResult } from './economy';
+import { CITY_BY_ID, START_CITY, type CityDef } from '../config/cities';
+import { cityPrice, fitPart, type TxResult } from './economy';
 import type { GameState } from './game-state';
 
 export interface ShopRow {
@@ -74,7 +75,7 @@ function partDelta(s: GameState, part: Part): string {
 }
 
 /** Everything the city sells that could still be useful: bigger hulls, upgrade parts, repair kits. */
-export function shopRows(s: GameState): ShopRow[] {
+export function shopRows(s: GameState, city: CityDef = CITY_BY_ID[START_CITY]): ShopRow[] {
   const current = HULLS[s.vehicle.hullId];
   const rows: ShopRow[] = [];
 
@@ -84,8 +85,8 @@ export function shopRows(s: GameState): ShopRow[] {
       kind: 'hull',
       id: hull.id,
       name: hull.name.toUpperCase(),
-      price: hull.price,
-      affordable: s.credits >= hull.price,
+      price: cityPrice(hull.price, city),
+      affordable: s.credits >= cityPrice(hull.price, city),
       summary: `HP ${hull.baseHp} ${slots} SLOTS`,
       delta: `HP ${signed(hull.baseHp - current.baseHp)}`,
     });
@@ -93,15 +94,15 @@ export function shopRows(s: GameState): ShopRow[] {
 
   const order = (slot: SlotType): number => SLOT_TYPES.indexOf(slot);
   const parts = Object.values(PARTS)
-    .filter((p) => p.price > 0)
+    .filter((p) => p.price > 0 && city.stock.includes(p.id))
     .sort((a, b) => order(a.slot) - order(b.slot) || a.tier - b.tier);
   for (const part of parts) {
     rows.push({
       kind: 'part',
       id: part.id,
       name: part.name.toUpperCase(),
-      price: part.price,
-      affordable: s.credits >= part.price,
+      price: cityPrice(part.price, city),
+      affordable: s.credits >= cityPrice(part.price, city),
       summary: partSummary(part),
       delta: partDelta(s, part),
     });
