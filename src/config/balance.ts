@@ -30,6 +30,8 @@ export const BALANCE = {
   CONTACT_RADIUS: 12,
   GRACE_SECONDS: 4,
   RESCUE_FUEL: 15,
+  /** Longest a vehicle stranded on the scorched side survives while waiting for help. */
+  SCORCH_SURVIVE_SECONDS: 20,
 } as const;
 
 /** Night is half of the planet's circumference. */
