@@ -33,6 +33,7 @@ import { GroundLayer } from './drive/ground';
 import { Lighting, RIG_SCREEN_X, RIG_SCREEN_Y } from './drive/lighting';
 import { ParticleLayer } from './drive/particles-layer';
 import { PiratesMap } from './drive/pirates-map';
+import { RescueFlow } from './drive/rescue-flow';
 
 type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'F' | 'E' | 'H', Phaser.Input.Keyboard.Key>;
 
@@ -45,6 +46,7 @@ export class DriveScene extends Phaser.Scene {
   private sparks!: ParticleLayer;
   private lighting!: Lighting;
   private pirates!: PiratesMap;
+  private rescue!: RescueFlow;
   private grace = new Grace();
   private rig!: Phaser.GameObjects.Image;
   private city!: Phaser.GameObjects.Image;
@@ -87,6 +89,10 @@ export class DriveScene extends Phaser.Scene {
     this.lighting = new Lighting(this);
     this.pirates = new PiratesMap(this, makeRng(randomSeed()));
     this.grace = new Grace();
+    this.rescue = new RescueFlow(this, makeRng(randomSeed()), {
+      freeze: (frozen) => this.setFrozen(frozen),
+      destroyed: (reason) => this.handleDestroyed(reason),
+    });
     this.events.off('battle-done');
     this.events.on('battle-done', this.onBattleDone, this);
     this.events.off('city-done');
@@ -167,6 +173,8 @@ export class DriveScene extends Phaser.Scene {
 
     const dockPressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
     if (dockPressed && ui.nearDock && !this.frozen && !this.destroyedPending) this.enterCity();
+    const helpPressed = Phaser.Input.Keyboard.JustDown(this.keys.H);
+    if (helpPressed && ui.broken && !this.frozen && !this.destroyedPending && !this.rescue.active) this.rescue.begin();
 
     this.grace.tick(dt);
     if (!this.frozen) {

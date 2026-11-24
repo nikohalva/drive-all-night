@@ -68,3 +68,19 @@ export function applyRescue(s: GameState, o: RescueOutcome): GameState {
       return timed;
   }
 }
+
+/** One line telling the player how their distress call went. */
+export function describeRescue(o: RescueOutcome, before: GameState, after: GameState): string {
+  switch (o.type) {
+    case 'rescued': {
+      if (o.fee === 0) return 'A COLLECTOR CREW PATCHED YOU UP. THIS CALL WAS FREE';
+      const added = Math.round(after.debt - before.debt);
+      const fee = `A COLLECTOR CREW PATCHED YOU UP. FEE ${o.fee} CR`;
+      return added > 0 ? `${fee}. ${added} CR ADDED TO DEBT` : fee;
+    }
+    case 'pirates':
+      return 'PIRATES ANSWERED YOUR CALL. THEY TOOK YOUR CARGO';
+    case 'destroyed':
+      return 'NO ONE CAME IN TIME';
+  }
+}

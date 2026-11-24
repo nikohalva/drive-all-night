@@ -1,7 +1,7 @@
 import { BALANCE } from '../src/config/balance';
 import { newGame } from '../src/sim/game-state';
 import { makeRng } from '../src/sim/rng';
-import { applyRescue, RESCUE_TABLE, rollRescue } from '../src/sim/rescue';
+import { applyRescue, describeRescue, RESCUE_TABLE, rollRescue } from '../src/sim/rescue';
 import type { Zone } from '../src/sim/world';
 
 test('first rescue is free and guaranteed', () => {
@@ -99,4 +99,29 @@ test('a destroyed outcome only advances the clock; the caller reloads the save',
   const s0 = newGame(1);
   const r = applyRescue(s0, { type: 'destroyed', waitSeconds: 40 });
   expect(r).toEqual({ ...s0, t: 40 });
+});
+
+test('describeRescue tells the player what happened, including debt', () => {
+  const s0 = newGame(1);
+  const free = applyRescue(s0, { type: 'rescued', waitSeconds: 15, fee: 0 });
+  expect(describeRescue({ type: 'rescued', waitSeconds: 15, fee: 0 }, s0, free)).toBe(
+    'A COLLECTOR CREW PATCHED YOU UP. THIS CALL WAS FREE',
+  );
+
+  const rich = { ...s0, credits: 1000 };
+  const paid = applyRescue(rich, { type: 'rescued', waitSeconds: 30, fee: 300 });
+  expect(describeRescue({ type: 'rescued', waitSeconds: 30, fee: 300 }, rich, paid)).toBe(
+    'A COLLECTOR CREW PATCHED YOU UP. FEE 300 CR',
+  );
+
+  const poor = { ...s0, credits: 100 };
+  const indebted = applyRescue(poor, { type: 'rescued', waitSeconds: 30, fee: 300 });
+  expect(describeRescue({ type: 'rescued', waitSeconds: 30, fee: 300 }, poor, indebted)).toBe(
+    'A COLLECTOR CREW PATCHED YOU UP. FEE 300 CR. 200 CR ADDED TO DEBT',
+  );
+
+  expect(describeRescue({ type: 'pirates', waitSeconds: 25 }, s0, s0)).toBe(
+    'PIRATES ANSWERED YOUR CALL. THEY TOOK YOUR CARGO',
+  );
+  expect(describeRescue({ type: 'destroyed', waitSeconds: 40 }, s0, s0)).toBe('NO ONE CAME IN TIME');
 });

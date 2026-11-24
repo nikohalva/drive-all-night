@@ -11,7 +11,6 @@ export class BootScene extends Phaser.Scene {
       this.scene.start('gallery', { page: Number(params.get('gallery')) || 1 });
       return;
     }
-    // The title screen arrives in a later task; for now a new game starts straight away.
-    this.scene.start('drive');
+    this.scene.start('title');
   }
 }

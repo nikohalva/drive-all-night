@@ -148,7 +148,7 @@ export class HudScene extends Phaser.Scene {
     }
     if (d.scorching && d.blink) this.centered(ctx, 'SCORCHING!', 40, PAL.amber, 2);
     const prompts: string[] = [];
-    if (d.broken) prompts.push('BROKEN DOWN');
+    if (d.broken) prompts.push('BROKEN DOWN  H: CALL FOR HELP');
     if (d.nearDock) prompts.push('E: DOCK');
     if (d.fuelHint) prompts.push('F: FUEL FROM CARGO');
     prompts.forEach((p, i) => this.centered(ctx, p, 226 - i * 9, d.broken && i === 0 ? PAL.red : PAL.amber));
