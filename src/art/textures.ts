@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { VehicleState } from '../sim/vehicle';
 import { drawText, textWidth } from './font';
+import { PinnedLru } from './lru';
 import {
   makeCanvas,
   paintCity,
@@ -43,21 +44,27 @@ export function ensureLabel(scene: Phaser.Scene, text: string, color: string, gl
 }
 
 const MAX_CHUNKS = 64;
-const chunkLru = new Map<string, true>();
+let chunkScene: Phaser.Scene | null = null;
+const chunkCache = new PinnedLru(MAX_CHUNKS, (key) => chunkScene?.textures.remove(key));
 
-/** Ground chunk texture for chunk (cx, cy); the y index wraps with the planet. Old chunks are evicted. */
+/**
+ * Ground chunk texture for chunk (cx, cy); the y index wraps with the planet. The texture
+ * stays pinned (never evicted) until the caller hands it back with `releaseChunk`.
+ */
 export function ensureChunk(scene: Phaser.Scene, seed: number, cx: number, cy: number): string {
+  chunkScene = scene;
   const key = `chunk-${seed}-${cx}-${wrapChunkY(cy)}`;
-  if (chunkLru.has(key)) {
-    chunkLru.delete(key);
-  } else {
-    addOnce(scene, key, () => paintGroundChunk(seed, cx, cy));
-    while (chunkLru.size >= MAX_CHUNKS) {
-      const oldest = chunkLru.keys().next().value as string;
-      chunkLru.delete(oldest);
-      scene.textures.remove(oldest);
-    }
+  if (chunkCache.has(key) && scene.textures.exists(key)) {
+    chunkCache.pin(key);
+    chunkCache.touch(key);
+    return key;
   }
-  chunkLru.set(key, true);
+  addOnce(scene, key, () => paintGroundChunk(seed, cx, cy));
+  chunkCache.add(key, true);
   return key;
+}
+
+/** The chunk is off screen; its texture may now be evicted when the cache is full. */
+export function releaseChunk(key: string): void {
+  chunkCache.unpin(key);
 }

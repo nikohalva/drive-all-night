@@ -1,5 +1,6 @@
 import { BALANCE } from '../config/balance';
 import type { Rng } from './rng';
+import { starterVehicle, vehicleStats } from './vehicle';
 import type { Zone } from './world';
 
 export interface Pirate {
@@ -23,10 +24,13 @@ export function spawnChancePerSecond(zone: Zone, cargo: number, easy: boolean): 
   return easy ? chance * 0.25 : chance;
 }
 
-/** Pirates grow with the player's vehicle strength and with the cargo carried. */
+/** The strength of a fresh, unupgraded rig; pirates scale with strength above this. */
+const STARTER_STRENGTH = vehicleStats(starterVehicle()).strength;
+
+/** Pirates grow with how far the player has upgraded past the starter, and with the cargo carried. */
 export function pirateLevel(strength: number, cargo: number, easy: boolean): number {
   if (easy) return 1;
-  return Math.max(1, Math.round(0.5 * strength + cargo / 100));
+  return Math.max(1, Math.round(0.5 * (strength - STARTER_STRENGTH) + 1 + cargo / 100));
 }
 
 export function makePirateGroup(rng: Rng, level: number, easy: boolean): Pirate[] {

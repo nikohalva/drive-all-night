@@ -1,8 +1,8 @@
 import { BALANCE } from '../src/config/balance';
 import { newGame } from '../src/sim/game-state';
 import { makeRng } from '../src/sim/rng';
-import { applyRescue, describeRescue, RESCUE_TABLE, rollRescue } from '../src/sim/rescue';
-import type { Zone } from '../src/sim/world';
+import { applyRescue, describeRescue, RESCUE_TABLE, rescueFuel, rollRescue } from '../src/sim/rescue';
+import { cityPosition, nearestCopy, type Zone } from '../src/sim/world';
 
 test('first rescue is free and guaranteed', () => {
   for (const z of ['sunset', 'deep', 'predawn', 'scorch'] as const) {
@@ -124,4 +124,18 @@ test('describeRescue tells the player what happened, including debt', () => {
     'PIRATES ANSWERED YOUR CALL. THEY TOOK YOUR CARGO',
   );
   expect(describeRescue({ type: 'destroyed', waitSeconds: 40 }, s0, s0)).toBe('NO ONE CAME IN TIME');
+});
+
+test('the rescue crew brings enough fuel to get back toward the city, up to a full tank', () => {
+  const s0 = newGame(1);
+  const city = cityPosition(0);
+  const at = (distance: number) => ({ ...s0, player: { ...s0.player, x: city.x, y: nearestCopy(city.y, 0) + distance } });
+  // beside the city only the minimum is needed
+  expect(rescueFuel(s0)).toBe(BALANCE.RESCUE_FUEL);
+  // 4000 px behind: 4000 / (80 - 36) s of driving at 0.25/s, with a 10% margin
+  expect(rescueFuel(at(4000))).toBeCloseTo((4000 / 44) * 0.25 * 1.1, 1);
+  // far away the tank is the limit
+  expect(rescueFuel(at(30000))).toBe(40);
+  const r = applyRescue({ ...at(30000), vehicle: { ...s0.vehicle, hp: 0, fuel: 0 } }, { type: 'rescued', waitSeconds: 30, fee: 0 });
+  expect(r.vehicle.fuel).toBe(40);
 });

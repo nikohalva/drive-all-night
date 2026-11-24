@@ -11,12 +11,14 @@ test('pirates hunt the sunset band, rarely elsewhere, gently at first', () => {
   expect(spawnChancePerSecond('deep', 0, false)).toBeCloseTo(0.004);
 });
 
-test('pirate level follows vehicle strength and cargo once the easy start is over', () => {
+test('pirate level follows vehicle strength above the starter and cargo once the easy start is over', () => {
   expect(pirateLevel(8, 0, true)).toBe(1);
   expect(pirateLevel(40, 500, true)).toBe(1);
   expect(pirateLevel(1, 0, false)).toBe(1);
-  expect(pirateLevel(8, 0, false)).toBe(4);
-  expect(pirateLevel(8, 300, false)).toBe(7);
+  expect(pirateLevel(8, 0, false)).toBe(1); // the first sale does not make an unupgraded rig's life harder
+  expect(pirateLevel(8, 60, false)).toBe(2); // a full starter hold is a modest risk
+  expect(pirateLevel(8, 300, false)).toBe(4);
+  expect(pirateLevel(20, 0, false)).toBe(7);
   expect(pirateLevel(20, 0, false)).toBeGreaterThan(pirateLevel(8, 0, false));
 });
 

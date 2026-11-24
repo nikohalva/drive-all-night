@@ -3,11 +3,13 @@ import { HULLS, PARTS, REPAIR_KIT, SLOT_TYPES, type HullId, type SlotType } from
 import type { GameState } from './game-state';
 import { vehicleStats, type VehicleState } from './vehicle';
 
+export type TxFailure = 'credits' | 'slot' | 'not-owned' | 'nothing' | 'required';
+
 export type TxResult =
   | { ok: true; state: GameState }
-  | { ok: false; reason: 'credits' | 'slot' | 'not-owned' | 'nothing' };
+  | { ok: false; reason: TxFailure };
 
-const fail = (reason: 'credits' | 'slot' | 'not-owned' | 'nothing'): TxResult => ({ ok: false, reason });
+const fail = (reason: TxFailure): TxResult => ({ ok: false, reason });
 const done = (state: GameState): TxResult => ({ ok: true, state });
 const withVehicle = (s: GameState, patch: Partial<VehicleState>): GameState => ({
   ...s,
@@ -58,6 +60,10 @@ export function fitPart(s: GameState, partId: string, slot: SlotType, index: num
 export function unfitPart(s: GameState, slot: SlotType, index: number): TxResult {
   const previous = s.vehicle.fitted[slot][index];
   if (!previous) return fail('nothing');
+  // a rig with no engine cannot move and one with no tank cannot run: neither can be rescued from the map
+  if ((slot === 'engine' || slot === 'tank') && s.vehicle.fitted[slot].filter(Boolean).length <= 1) {
+    return fail('required');
+  }
   const slotParts = [...s.vehicle.fitted[slot]];
   slotParts[index] = null;
   return done(

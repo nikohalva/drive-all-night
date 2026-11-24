@@ -15,7 +15,7 @@ import {
 import { makePirateGroup } from '../src/sim/pirates';
 
 const player = { x: 2000, y: 50000 };
-const ctx: FleetContext = { zone: 'sunset', cargo: 0, strength: 8, easy: true, graceActive: false };
+const ctx: FleetContext = { zone: 'sunset', cargo: 0, strength: 8, easy: true, graceActive: false, helpless: false };
 const always = () => 0;
 const never = () => 0.999;
 
@@ -75,19 +75,31 @@ test('spawns are kept off the cliff walls', () => {
 });
 
 test('once the easy start is over pirates scale with the rig and its cargo', () => {
-  const hard = { ...ctx, easy: false, strength: 20, cargo: 200 };
+  const hard = { ...ctx, easy: false, strength: 28, cargo: 200 };
   const g = maybeSpawnGroup(always, [], player, hard, 1);
-  expect(g?.level).toBe(12);
+  expect(g?.level).toBe(13);
   expect(g?.pirates).toHaveLength(3);
 });
 
-test('a group closes in at 90% of its fastest pirate', () => {
+test('a helpless rig (hull at zero) draws no new pirates', () => {
+  expect(maybeSpawnGroup(always, [], player, { ...ctx, helpless: true }, 1)).toBeNull();
+  expect(maybeSpawnGroup(always, [], player, { ...ctx, helpless: false }, 1)).not.toBeNull();
+});
+
+test('a group closes in at 80% of its fastest pirate', () => {
   const g = group();
-  expect(groupSpeed(g)).toBeCloseTo(0.9 * 74);
+  expect(groupSpeed(g)).toBeCloseTo(0.8 * 74);
   const next = stepGroup(g, player, 1);
   const before = Math.hypot(player.x - g.x, player.y - g.y);
   const after = Math.hypot(player.x - next.x, player.y - next.y);
-  expect(before - after).toBeCloseTo(0.9 * 74);
+  expect(before - after).toBeCloseTo(0.8 * 74);
+});
+
+test('the starter rig at full speed can outrun every early pirate group', () => {
+  for (let level = 1; level <= 7; level++) {
+    const g = group({ level, pirates: makePirateGroup(always, level, false) });
+    expect(groupSpeed(g)).toBeLessThan(80);
+  }
 });
 
 test('a group never overshoots its target', () => {

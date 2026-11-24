@@ -18,6 +18,8 @@ export interface FleetContext {
   easy: boolean;
   /** True for a few seconds after a battle. */
   graceActive: boolean;
+  /** The hull is at zero: nothing is left to fight with, so no new pirates come. */
+  helpless: boolean;
 }
 
 /** Pirates appear this far toward the sunset from the player, spread this wide either side. */
@@ -27,8 +29,8 @@ export const SPAWN_SPREAD = 120;
 export const WARN_DISTANCE = 160;
 /** A group that is left this far behind gives up the chase. */
 export const GIVE_UP_DISTANCE = 600;
-/** Gunships keep a little below their top speed so a fast rig can outrun them. */
-const CHASE_SPEED_FRACTION = 0.9;
+/** Gunships chase well below their top speed so a rig at full throttle can outrun early groups. */
+const CHASE_SPEED_FRACTION = 0.8;
 /** Keep spawns clear of the cliff walls. */
 const WALL_MARGIN = 20;
 
@@ -42,7 +44,7 @@ export function maybeSpawnGroup(
   ctx: FleetContext,
   id: number,
 ): PirateGroup | null {
-  if (ctx.graceActive || groups.length >= groupCap(ctx.easy)) return null;
+  if (ctx.graceActive || ctx.helpless || groups.length >= groupCap(ctx.easy)) return null;
   if (rng() >= spawnChancePerSecond(ctx.zone, ctx.cargo, ctx.easy)) return null;
 
   const level = pirateLevel(ctx.strength, ctx.cargo, ctx.easy);

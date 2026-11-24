@@ -159,3 +159,18 @@ test('credits never go negative', () => {
   expect(ok(repairFull(hurt)).credits).toBeGreaterThanOrEqual(0);
   expect(ok(refuelFull(hurt)).credits).toBeGreaterThanOrEqual(0);
 });
+
+test('you cannot strip the last engine or the last tank out of the rig', () => {
+  const s = newGame(1);
+  expect(unfitPart(s, 'engine', 0)).toEqual({ ok: false, reason: 'required' });
+  expect(unfitPart(s, 'tank', 0)).toEqual({ ok: false, reason: 'required' });
+  // everything else may come out
+  expect(unfitPart(s, 'weapon', 0).ok).toBe(true);
+  expect(unfitPart(s, 'collector', 0).ok).toBe(true);
+});
+
+test('with a spare engine fitted next to the first, either may be removed', () => {
+  let s = ok(buyHull({ ...newGame(1), credits: 99999 }, 'hauler'));
+  s = { ...s, vehicle: { ...s.vehicle, fitted: { ...s.vehicle.fitted, collector: ['collector-1', 'collector-1'] } } };
+  expect(unfitPart(s, 'collector', 1).ok).toBe(true);
+});

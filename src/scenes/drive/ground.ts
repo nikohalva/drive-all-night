@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CHUNK } from '../../art/painters';
-import { ensureChunk } from '../../art/textures';
+import { ensureChunk, releaseChunk } from '../../art/textures';
 
 const KEEP_RADIUS = 3;
 
@@ -9,7 +9,7 @@ const KEEP_RADIUS = 3;
  * the ring beyond it is prefetched one chunk per frame so crossing a chunk never hitches.
  */
 export class GroundLayer {
-  private readonly images = new Map<string, Phaser.GameObjects.Image>();
+  private readonly images = new Map<string, { image: Phaser.GameObjects.Image; texture: string }>();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -20,7 +20,10 @@ export class GroundLayer {
     const key = `${cx},${cy}`;
     if (this.images.has(key)) return;
     const tex = ensureChunk(this.scene, this.seed, cx, cy);
-    this.images.set(key, this.scene.add.image(cx * CHUNK, cy * CHUNK, tex).setOrigin(0, 0).setDepth(0));
+    this.images.set(key, {
+      image: this.scene.add.image(cx * CHUNK, cy * CHUNK, tex).setOrigin(0, 0).setDepth(0),
+      texture: tex,
+    });
   }
 
   /** Build everything needed to draw the first frame at (x, y). */
@@ -49,10 +52,11 @@ export class GroundLayer {
       }
     }
 
-    for (const [key, img] of this.images) {
+    for (const [key, entry] of this.images) {
       const [cx, cy] = key.split(',').map(Number);
       if (Math.max(Math.abs(cx - cx0), Math.abs(cy - cy0)) > KEEP_RADIUS) {
-        img.destroy();
+        entry.image.destroy();
+        releaseChunk(entry.texture);
         this.images.delete(key);
       }
     }

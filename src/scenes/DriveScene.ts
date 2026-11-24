@@ -177,6 +177,9 @@ export class DriveScene extends Phaser.Scene {
     if (helpPressed && ui.broken && !this.frozen && !this.destroyedPending && !this.rescue.active) this.rescue.begin();
 
     this.grace.tick(dt);
+    // a rig with no hull left has nothing to fight with: pirates leave it to the rescue call
+    const helpless = vehicle.hp <= 0;
+    if (helpless) this.pirates.clear();
     if (!this.frozen) {
       const contact = this.pirates.update(dt, time, { x: nk.x, y: nk.y }, {
         zone,
@@ -184,6 +187,7 @@ export class DriveScene extends Phaser.Scene {
         strength: stats.strength,
         easy: !prev.flags.easyStartOver,
         graceActive: this.grace.active,
+        helpless,
       });
       if (contact) this.startBattle(contact);
     }

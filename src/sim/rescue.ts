@@ -1,8 +1,9 @@
 import { BALANCE } from '../config/balance';
 import type { GameState } from './game-state';
 import type { Rng } from './rng';
+import { HULLS } from '../config/catalog';
 import { vehicleStats } from './vehicle';
-import type { Zone } from './world';
+import { cityPosition, nearestCopy, type Zone } from './world';
 
 export type RescueOutcome =
   | { type: 'rescued'; waitSeconds: number; fee: number }
@@ -43,6 +44,20 @@ export function rollRescue(
   return tooSlow ? { type: 'destroyed', waitSeconds: wait } : { type: 'rescued', waitSeconds: wait, fee: row.fee };
 }
 
+/**
+ * Fuel the crew tops you up with: enough to drive back toward the city (allowing for the city
+ * moving away with the night), never less than the minimum and never more than the tank holds.
+ */
+export function rescueFuel(s: GameState): number {
+  const city = cityPosition(s.t);
+  const cityY = nearestCopy(city.y, s.player.y);
+  const distance = Math.hypot(city.x - s.player.x, cityY - s.player.y);
+  const stats = vehicleStats(s.vehicle);
+  const closing = Math.max(10, stats.topSpeed - BALANCE.SUN_SPEED);
+  const needed = (distance / closing) * BALANCE.FUEL_PER_SECOND * HULLS[s.vehicle.hullId].tier * 1.1;
+  return Math.min(stats.tankCap, Math.max(BALANCE.RESCUE_FUEL, needed));
+}
+
 /** Fold a rescue outcome into the game state. A destroyed vehicle is the caller's to reload. */
 export function applyRescue(s: GameState, o: RescueOutcome): GameState {
   const timed: GameState = { ...s, t: s.t + o.waitSeconds };
@@ -57,7 +72,7 @@ export function applyRescue(s: GameState, o: RescueOutcome): GameState {
         vehicle: {
           ...s.vehicle,
           hp: Math.max(s.vehicle.hp, Math.ceil(0.25 * maxHp)),
-          fuel: Math.max(s.vehicle.fuel, BALANCE.RESCUE_FUEL),
+          fuel: Math.max(s.vehicle.fuel, rescueFuel(s)),
         },
         flags: { ...s.flags, firstRescueUsed: true },
       };
