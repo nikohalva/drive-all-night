@@ -15,6 +15,9 @@ import { advance } from '../sim/clock';
 import { forwardSpeed, stepDriving, type DriveEnv, type Kinematics } from '../sim/driving';
 import { newGame } from '../sim/game-state';
 import { collect } from '../sim/particles';
+import type { PirateGroup } from '../sim/pirate-fleet';
+import { Grace } from '../sim/pirates';
+import { makeRng, randomSeed } from '../sim/rng';
 import { loadGame } from '../sim/save';
 import { TERRAIN_SPEED, terrainAt } from '../sim/terrain';
 import { addCargo, burnFuel, isBroken, transferToTank, vehicleStats } from '../sim/vehicle';
@@ -29,6 +32,7 @@ import {
 import { GroundLayer } from './drive/ground';
 import { Lighting, RIG_SCREEN_X, RIG_SCREEN_Y } from './drive/lighting';
 import { ParticleLayer } from './drive/particles-layer';
+import { PiratesMap } from './drive/pirates-map';
 
 type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'F' | 'E' | 'H', Phaser.Input.Keyboard.Key>;
 
@@ -40,6 +44,8 @@ export class DriveScene extends Phaser.Scene {
   private ground!: GroundLayer;
   private sparks!: ParticleLayer;
   private lighting!: Lighting;
+  private pirates!: PiratesMap;
+  private grace = new Grace();
   private rig!: Phaser.GameObjects.Image;
   private city!: Phaser.GameObjects.Image;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -79,6 +85,10 @@ export class DriveScene extends Phaser.Scene {
     this.city = this.add.image(0, 0, ensureCityTexture(this)).setOrigin(1, CITY_DOCK_Y / CITY_H).setDepth(3);
     this.rig = this.add.image(0, 0, ensureRigTextures(this, s.vehicle)[0]).setDepth(10);
     this.lighting = new Lighting(this);
+    this.pirates = new PiratesMap(this, makeRng(randomSeed()));
+    this.grace = new Grace();
+    this.events.off('battle-done');
+    this.events.on('battle-done', this.onBattleDone, this);
 
     const kb = this.input.keyboard;
     if (!kb) throw new Error('keyboard input is required');
@@ -153,6 +163,18 @@ export class DriveScene extends Phaser.Scene {
     ui.fuelHint = vehicle.fuel < stats.tankCap * 0.3 && vehicle.cargo > 0;
     if (zone === 'dawn' && !this.frozen) this.handleDestroyed('dawn');
 
+    this.grace.tick(dt);
+    if (!this.frozen) {
+      const contact = this.pirates.update(dt, time, { x: nk.x, y: nk.y }, {
+        zone,
+        cargo: vehicle.cargo,
+        strength: stats.strength,
+        easy: !prev.flags.easyStartOver,
+        graceActive: this.grace.active,
+      });
+      if (contact) this.startBattle(contact);
+    }
+
     this.draw(time, dt, tNew, vehicle, zone, cityPos.x, cityY);
   }
 
@@ -198,6 +220,20 @@ export class DriveScene extends Phaser.Scene {
       secondsUntilDawn: secondsUntilDawn(k.y, t),
       dt,
     });
+  }
+
+  /** Pirates caught the rig: freeze the world and hand over to the turn-based fight. */
+  private startBattle(group: PirateGroup): void {
+    this.frozen = true;
+    this.k = { ...this.k, vx: 0, vy: 0 };
+    this.scene.launch('battle', { enemies: group.pirates });
+  }
+
+  /** The fight is over; give the player breathing room before the next pirates. */
+  private onBattleDone(): void {
+    this.pirates.clear();
+    this.grace.start();
+    this.frozen = false;
   }
 
   private handleDestroyed(reason: DestroyReason): void {
