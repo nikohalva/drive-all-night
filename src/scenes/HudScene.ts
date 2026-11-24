@@ -2,16 +2,17 @@ import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
 import { NIGHT_LEN } from '../config/balance';
+import { VIEW } from '../config/view';
 import { getState, ui } from '../game/session';
 import { planetTimeLabel } from '../sim/clock';
 import { vehicleStats } from '../sim/vehicle';
 import { behindSunset, cityPosition, secondsUntilDawn, zoneAt } from '../sim/world';
 
-const W = 480;
-const H = 270;
-const BAR_Y = 250;
+const W = VIEW.W;
+const H = VIEW.H;
+const BAR_Y = H - 20;
 const SEGMENTS = 8;
-const MAP_X = 340;
+const MAP_X = W - 140;
 const MAP_W = 130;
 
 interface HudData {
@@ -143,7 +144,7 @@ export class HudScene extends Phaser.Scene {
 
     // warnings and prompts
     if (d.message) {
-      this.centered(ctx, d.message, 108, PAL.white, 2);
+      this.centered(ctx, d.message, Math.round(H * 0.4), PAL.white, 2);
       return;
     }
     if (d.scorching && d.blink) this.centered(ctx, 'SCORCHING!', 40, PAL.amber, 2);
@@ -151,6 +152,6 @@ export class HudScene extends Phaser.Scene {
     if (d.broken) prompts.push('BROKEN DOWN  H: CALL FOR HELP');
     if (d.nearDock) prompts.push('E: DOCK');
     if (d.fuelHint) prompts.push('F: FUEL FROM CARGO');
-    prompts.forEach((p, i) => this.centered(ctx, p, 226 - i * 9, d.broken && i === 0 ? PAL.red : PAL.amber));
+    prompts.forEach((p, i) => this.centered(ctx, p, H - 44 - i * 9, d.broken && i === 0 ? PAL.red : PAL.amber));
   }
 }

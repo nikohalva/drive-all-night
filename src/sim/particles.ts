@@ -1,6 +1,6 @@
 import { BALANCE, NIGHT_LEN } from '../config/balance';
 import { hash2 } from './rng';
-import { terrainAt } from './terrain';
+import { isPassable, terrainAt } from './terrain';
 import { behindSunset, sunsetsPassed } from './world';
 
 const CELLS_Y = BALANCE.WORLD_LEN / BALANCE.CELL;
@@ -18,7 +18,7 @@ export function baseDensity(behind: number): number {
 /** Does grid cell (cx, cy) hold Particle X right now (ignoring depletion)? */
 export function cellHasX(seed: number, cx: number, cy: number, t: number): boolean {
   const y = centreY(cy);
-  if (terrainAt(seed, centreX(cx), y) === 'cliff') return false;
+  if (!isPassable(terrainAt(seed, centreX(cx), y))) return false;
   return hash2(seed, cx, wrapCell(cy)) < baseDensity(behindSunset(y, t));
 }
 

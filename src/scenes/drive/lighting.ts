@@ -7,7 +7,7 @@ const hex = (c: string): number => parseInt(c.slice(1), 16);
 
 /** Where the rig sits on screen: low, so more of the road toward the sunset shows. */
 export const RIG_SCREEN_X = VIEW_W / 2;
-export const RIG_SCREEN_Y = 195;
+export const RIG_SCREEN_Y = Math.round(VIEW_H * 0.72);
 
 const DARKNESS: Record<Zone, number> = { sunset: 0.1, deep: 0.4, predawn: 0.3, scorch: 0, dawn: 0 };
 

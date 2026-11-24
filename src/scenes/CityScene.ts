@@ -4,6 +4,7 @@ import { PAL } from '../art/palette';
 import { rigSignature } from '../art/painters';
 import { ensureRigTextures } from '../art/textures';
 import { BALANCE } from '../config/balance';
+import { VIEW } from '../config/view';
 import { getState, setState } from '../game/session';
 import {
   buyHull,
@@ -23,15 +24,18 @@ import { vehicleStats } from '../sim/vehicle';
 import { cityPosition, nearestCopy } from '../sim/world';
 import type { HullId } from '../config/catalog';
 
-const W = 480;
-const H = 270;
+const W = VIEW.W;
+const H = VIEW.H;
 const TABS = ['SELL', 'SHOP', 'GARAGE', 'SERVICES', 'SAVE', 'LEAVE'] as const;
 type Tab = (typeof TABS)[number];
-const VISIBLE_ROWS = 15;
+const VISIBLE_ROWS = 20;
 const ROW_H = 11;
 const LIST_Y = 52;
 const LIST_X = 6;
-const LIST_W = 296;
+const LIST_W = 400;
+/** Right-hand panel with the rig and its stats. */
+const SIDE_X = LIST_X + LIST_W + 8;
+const SIDE_W = W - SIDE_X - 6;
 const RIG_SCALE: Record<HullId, number> = { scout: 3, hauler: 2, juggernaut: 1.5 };
 
 const REASONS: Record<string, string> = {
@@ -73,7 +77,7 @@ export class CityScene extends Phaser.Scene {
     this.rigSig = '';
 
     this.drawBackground();
-    this.rig = this.add.image(392, 104, ensureRigTextures(this, getState().vehicle)[0]).setRotation(Math.PI / 2).setDepth(25);
+    this.rig = this.add.image(SIDE_X + SIDE_W / 2, LIST_Y + 70, ensureRigTextures(this, getState().vehicle)[0]).setRotation(Math.PI / 2).setDepth(25);
 
     if (this.textures.exists('city-ui')) this.textures.remove('city-ui');
     this.canvas = this.textures.createCanvas('city-ui', W, H) as Phaser.Textures.CanvasTexture;
@@ -395,9 +399,9 @@ export class CityScene extends Phaser.Scene {
     if (detail) this.text(ctx, detail, LIST_X + 4, LIST_Y + VISIBLE_ROWS * ROW_H + 6, PAL.cyanPale);
 
     // rig and stats
-    this.panel(ctx, 310, LIST_Y - 2, 164, 128);
+    this.panel(ctx, SIDE_X, LIST_Y - 2, SIDE_W, 150);
     const stats = vehicleStats(s.vehicle);
-    this.panel(ctx, 310, 184, 164, 66);
+    this.panel(ctx, SIDE_X, LIST_Y + 154, SIDE_W, 72);
     const lines = [
       `HULL ${Math.ceil(s.vehicle.hp)}/${stats.maxHp}  ARMOR ${stats.armor}`,
       `SPEED ${stats.topSpeed}  SWEEP ${stats.collectRadius}`,
@@ -405,10 +409,10 @@ export class CityScene extends Phaser.Scene {
       `CARGO ${s.vehicle.cargo.toFixed(0)}/${stats.cargoCap}  KITS ${s.vehicle.repairKits}`,
       ...stats.weapons.map((w, i) => `GUN ${i + 1} ${w.name.toUpperCase()} ${w.damage}`),
     ];
-    lines.slice(0, 7).forEach((line, i) => this.text(ctx, line, 316, 190 + i * 8, i < 4 ? PAL.white : PAL.amber));
+    lines.slice(0, 7).forEach((line, i) => this.text(ctx, line, SIDE_X + 6, LIST_Y + 160 + i * 9, i < 4 ? PAL.white : PAL.amber));
 
     // message
-    this.panel(ctx, 0, 256, W, 14);
-    this.text(ctx, this.message.text, 6, 260, this.message.good ? PAL.cyanPale : PAL.red);
+    this.panel(ctx, 0, H - 14, W, 14);
+    this.text(ctx, this.message.text, 6, H - 10, this.message.good ? PAL.cyanPale : PAL.red);
   }
 }

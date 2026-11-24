@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { VIEW } from './config/view';
 import { BootScene } from './scenes/BootScene';
 import { BattleScene } from './scenes/BattleScene';
 import { CityScene } from './scenes/CityScene';
@@ -8,8 +9,8 @@ import { HudScene } from './scenes/HudScene';
 import { TitleScene } from './scenes/TitleScene';
 import { VictoryScene } from './scenes/VictoryScene';
 
-export const GAME_W = 480;
-export const GAME_H = 270;
+export const GAME_W = VIEW.W;
+export const GAME_H = VIEW.H;
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,

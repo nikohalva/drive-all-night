@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import { PAL } from '../art/palette';
+import { VIEW } from '../config/view';
 import { ensureLabel, ensureRigTextures } from '../art/textures';
 import { getState } from '../game/session';
 
-const W = 480;
-const H = 270;
+const W = VIEW.W;
+const H = VIEW.H;
+const S = H / 270;
 /** Ignore keys for a moment so the purchase keypress cannot dismiss it. */
 const ARM_MS = 600;
 
@@ -20,17 +22,17 @@ export class VictoryScene extends Phaser.Scene {
     const label = (text: string, y: number, color: string, scale: number): void => {
       this.add.image(W / 2, y, ensureLabel(this, text, color, `${color}66`)).setScale(scale).setOrigin(0.5, 0);
     };
-    label('YOU MADE IT', 26, PAL.amber, 4);
-    label('THE JUGGERNAUT IS YOURS', 62, PAL.pink, 2);
+    label('YOU MADE IT', Math.round(26 * S), PAL.amber, 4);
+    label('THE JUGGERNAUT IS YOURS', Math.round(62 * S), PAL.pink, 2);
 
     const rig = this.add
-      .image(W / 2, 150, ensureRigTextures(this, getState().vehicle)[0])
+      .image(W / 2, Math.round(150 * S), ensureRigTextures(this, getState().vehicle)[0])
       .setRotation(Math.PI / 2)
       .setScale(1.5);
-    this.tweens.add({ targets: rig, y: 156, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: rig, y: Math.round(150 * S) + 6, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    label('THE NIGHT NEVER ENDS. KEEP DRIVING.', 214, PAL.cyanPale, 1);
-    label('PRESS ANY KEY', 232, PAL.white, 1);
+    label('THE NIGHT NEVER ENDS. KEEP DRIVING.', Math.round(214 * S), PAL.cyanPale, 1);
+    label('PRESS ANY KEY', Math.round(232 * S), PAL.white, 1);
 
     this.time.delayedCall(ARM_MS, () => {
       this.input.keyboard?.once('keydown', () => {

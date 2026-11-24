@@ -1,12 +1,31 @@
 import Phaser from 'phaser';
 import { CHUNK } from '../../art/painters';
 import { ensureChunk, releaseChunk } from '../../art/textures';
+import { VIEW_H, VIEW_W } from './particles-layer';
 
-const KEEP_RADIUS = 3;
+interface ChunkRange {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
+
+/** Chunks overlapping the view whose top-left corner is (scrollX, scrollY), grown by `pad` chunks. */
+function rangeFor(scrollX: number, scrollY: number, pad: number): ChunkRange {
+  return {
+    x0: Math.floor(scrollX / CHUNK) - pad,
+    x1: Math.floor((scrollX + VIEW_W) / CHUNK) + pad,
+    y0: Math.floor(scrollY / CHUNK) - pad,
+    y1: Math.floor((scrollY + VIEW_H) / CHUNK) + pad,
+  };
+}
+
+const inside = (r: ChunkRange, cx: number, cy: number): boolean =>
+  cx >= r.x0 && cx <= r.x1 && cy >= r.y0 && cy <= r.y1;
 
 /**
- * Keeps a window of ground chunks around the camera. The inner 3x3 is built at once;
- * the ring beyond it is prefetched one chunk per frame so crossing a chunk never hitches.
+ * Keeps ground chunks under the camera. Chunks in view are built at once; the ring
+ * just outside is prefetched one chunk per frame, so crossing a chunk never hitches.
  */
 export class GroundLayer {
   private readonly images = new Map<string, { image: Phaser.GameObjects.Image; texture: string }>();
@@ -26,35 +45,30 @@ export class GroundLayer {
     });
   }
 
-  /** Build everything needed to draw the first frame at (x, y). */
-  prime(x: number, y: number): void {
-    const cx0 = Math.floor(x / CHUNK);
-    const cy0 = Math.floor(y / CHUNK);
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) this.ensure(cx0 + dx, cy0 + dy);
+  /** Build everything needed to draw a frame with the camera at (scrollX, scrollY). */
+  prime(scrollX: number, scrollY: number): void {
+    const view = rangeFor(scrollX, scrollY, 0);
+    for (let cy = view.y0; cy <= view.y1; cy++) for (let cx = view.x0; cx <= view.x1; cx++) this.ensure(cx, cy);
   }
 
-  update(x: number, y: number): void {
-    const cx0 = Math.floor(x / CHUNK);
-    const cy0 = Math.floor(y / CHUNK);
+  update(scrollX: number, scrollY: number): void {
+    this.prime(scrollX, scrollY);
 
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) this.ensure(cx0 + dx, cy0 + dy);
-
-    // Prefetch the outer ring, nearest first, one per frame.
-    outer: for (let r = 2; r <= 2; r++) {
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          const key = `${cx0 + dx},${cy0 + dy}`;
-          if (this.images.has(key)) continue;
-          this.ensure(cx0 + dx, cy0 + dy);
+    // prefetch the ring just outside the view, one chunk per frame
+    const ring = rangeFor(scrollX, scrollY, 1);
+    outer: for (let cy = ring.y0; cy <= ring.y1; cy++) {
+      for (let cx = ring.x0; cx <= ring.x1; cx++) {
+        if (!this.images.has(`${cx},${cy}`)) {
+          this.ensure(cx, cy);
           break outer;
         }
       }
     }
 
+    const keep = rangeFor(scrollX, scrollY, 2);
     for (const [key, entry] of this.images) {
       const [cx, cy] = key.split(',').map(Number);
-      if (Math.max(Math.abs(cx - cx0), Math.abs(cy - cy0)) > KEEP_RADIUS) {
+      if (!inside(keep, cx, cy)) {
         entry.image.destroy();
         releaseChunk(entry.texture);
         this.images.delete(key);

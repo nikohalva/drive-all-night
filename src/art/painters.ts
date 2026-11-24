@@ -1,7 +1,7 @@
 import { BALANCE } from '../config/balance';
 import { PARTS, type HullId } from '../config/catalog';
 import { hash2 } from '../sim/rng';
-import { terrainAt, type Terrain } from '../sim/terrain';
+import { isPassable, terrainAt, type Terrain } from '../sim/terrain';
 import type { VehicleState } from '../sim/vehicle';
 import { drawText } from './font';
 import { PAL } from './palette';
@@ -450,8 +450,9 @@ export function paintGroundChunk(seed: number, chunkX: number, chunkY: number): 
   const B = 4;
   const n = CHUNK / B;
 
+  // terrain per 4x4 block, with one extra row above and below for edges and shadows
   const kinds: Terrain[][] = [];
-  for (let by = -1; by < n; by++) {
+  for (let by = -1; by <= n; by++) {
     const row: Terrain[] = [];
     for (let bx = 0; bx < n; bx++) row.push(terrainAt(seed, x0 + bx * B + 2, y0 + by * B + 2));
     kinds[by + 1] = row;
@@ -466,28 +467,56 @@ export function paintGroundChunk(seed: number, chunkX: number, chunkY: number): 
       const bx = pxl >> 2;
       const wx = x0 + pxl;
       const kind = kinds[by + 1][bx];
-      const aboveKind = kinds[by][bx];
+      const above = kinds[by][bx];
+      const below = kinds[by + 2][bx];
       const h = hash2(seed + 7, wx, wy);
+      const topEdge = above !== kind;
+      const bottomEdge = below !== kind;
       let color: string;
       switch (kind) {
         case 'dunes':
-          if (aboveKind !== 'dunes' && rowInBlock === 0) color = PAL.duneRim;
-          else if (aboveKind !== 'dunes' && rowInBlock === 1) color = PAL.duneMid;
+          if (topEdge && rowInBlock === 0) color = PAL.duneRim;
+          else if (topEdge && rowInBlock === 1) color = PAL.duneMid;
           else color = wy % 8 < 2 ? PAL.duneBody : h < 0.05 ? '#1d0a3a' : '#27104a';
           break;
         case 'rock':
-          if (aboveKind !== 'rock' && rowInBlock === 0) color = '#6a5a8a';
+          if (topEdge && rowInBlock === 0) color = '#6a5a8a';
           else color = h < 0.18 ? '#4a3a6a' : h > 0.9 ? '#150d26' : '#2c1f45';
           break;
+        case 'mountain':
+          // massif: lit ridge facing the sunset, dark foot on the far side
+          if (topEdge && rowInBlock === 0) color = '#ff6ab8';
+          else if (topEdge && rowInBlock === 1) color = '#9a3a9a';
+          else if (bottomEdge && rowInBlock >= 2) color = '#0e0618';
+          else color = (wx + wy) % 9 === 0 ? '#4a2860' : h < 0.15 ? '#3d1f55' : h > 0.92 ? '#1a0b28' : '#2e1640';
+          break;
+        case 'canyon':
+          // a rift: lit lip on the near side, near-black depths with a faint cyan glow
+          if (topEdge && rowInBlock === 0) color = '#c0209f';
+          else if (topEdge && rowInBlock === 1) color = '#3a1050';
+          else if (bottomEdge && rowInBlock === 3) color = '#2a1040';
+          else color = h < 0.04 ? '#1c6a7a' : h < 0.12 ? '#0b2a36' : '#05020a';
+          break;
+        case 'mesa':
+          if (topEdge && rowInBlock <= 1) color = '#ff8ad8';
+          else color = h < 0.2 ? '#5e3a70' : '#4a2a5a';
+          break;
         case 'cliff':
-          if (aboveKind !== 'cliff' && rowInBlock === 0) color = '#c0209f';
+          if (topEdge && rowInBlock === 0) color = '#c0209f';
           else color = wy % 6 === 0 ? '#1a0f2e' : h < 0.06 ? '#241540' : '#0c0618';
           break;
         default:
           color = h < 0.035 ? PAL.nightLight : h > 0.993 ? PAL.nightDark : PAL.night;
       }
       let [r, gg, b] = rgb(color);
-      if (kind !== 'cliff' && (wx % 20 === 0 || wy % 20 === 0)) {
+      const passable = isPassable(kind);
+      // obstacles cast a short shadow away from the sunset
+      if (passable && !isPassable(above) && rowInBlock <= 1) {
+        r *= 0.55;
+        gg *= 0.55;
+        b *= 0.55;
+      }
+      if (passable && (wx % 20 === 0 || wy % 20 === 0)) {
         r = r * 0.8 + grid[0] * 0.2;
         gg = gg * 0.8 + grid[1] * 0.2;
         b = b * 0.8 + grid[2] * 0.2;

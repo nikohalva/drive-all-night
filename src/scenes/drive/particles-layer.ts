@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { BALANCE } from '../../config/balance';
+import { VIEW } from '../../config/view';
 import { getDepletion } from '../../game/session';
 import { cellHasX } from '../../sim/particles';
 import { hash2 } from '../../sim/rng';
 
-export const VIEW_W = 480;
-export const VIEW_H = 270;
+export const VIEW_W = VIEW.W;
+export const VIEW_H = VIEW.H;
 
 const WHITE = 0xffffff;
 const PALE = 0x7ffcff;

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { PAL } from '../art/palette';
+import { VIEW } from '../config/view';
 import { ensureLabel, ensureRigTextures } from '../art/textures';
 import { resetDepletion, setState } from '../game/session';
 import { newGame } from '../sim/game-state';
@@ -7,8 +8,10 @@ import { randomSeed } from '../sim/rng';
 import { loadGame, saveGame } from '../sim/save';
 import { starterVehicle } from '../sim/vehicle';
 
-const W = 480;
-const H = 270;
+const W = VIEW.W;
+const H = VIEW.H;
+/** Layout was drawn for 270 px of height; scale vertical positions from that. */
+const S = H / 270;
 const hex = (c: string): number => parseInt(c.slice(1), 16);
 
 /** Title screen: CONTINUE (only with a usable save) and NEW GAME. */
@@ -32,11 +35,11 @@ export class TitleScene extends Phaser.Scene {
       this.add.image(W / 2 + scale, y + scale, tex).setScale(scale).setOrigin(0.5, 0).setTintFill(0x07020f).setDepth(9);
       this.add.image(W / 2, y, tex).setScale(scale).setOrigin(0.5, 0).setDepth(10);
     };
-    title('DRIVE', 24, PAL.pink, 6);
-    title('ALL NIGHT', 68, PAL.amber, 4);
+    title('DRIVE', Math.round(24 * S), PAL.pink, 8);
+    title('ALL NIGHT', Math.round(72 * S), PAL.amber, 5);
 
     const rig = this.add
-      .image(W / 2, 218, ensureRigTextures(this, starterVehicle())[0])
+      .image(W / 2, Math.round(218 * S), ensureRigTextures(this, starterVehicle())[0])
       .setRotation(Math.PI / 2)
       .setScale(2)
       .setDepth(10);
@@ -66,9 +69,9 @@ export class TitleScene extends Phaser.Scene {
     });
     this.choice = 0;
 
-    label('UP/DOWN + ENTER', W / 2, 252, '#7a6a9a', 1);
+    label('UP/DOWN + ENTER', W / 2, H - 20, '#7a6a9a', 1);
     this.add
-      .image(W / 2, 262, ensureLabel(this, 'W/S/A/D OR ARROWS DRIVE   F FUEL   E DOCK   H HELP', '#7a6a9a'))
+      .image(W / 2, H - 10, ensureLabel(this, 'W/S/A/D OR ARROWS DRIVE   F FUEL   E DOCK   H HELP', '#7a6a9a'))
       .setOrigin(0.5, 0)
       .setDepth(10);
 
@@ -93,7 +96,7 @@ export class TitleScene extends Phaser.Scene {
       const selected = i === this.choice;
       const text = selected ? `> ${item.label} <` : item.label;
       return this.add
-        .image(W / 2, 132 + i * 20, ensureLabel(this, text, selected ? PAL.white : '#8a7aaa', selected ? `${PAL.pink}88` : undefined))
+        .image(W / 2, Math.round(132 * S) + i * 22, ensureLabel(this, text, selected ? PAL.white : '#8a7aaa', selected ? `${PAL.pink}88` : undefined))
         .setScale(2)
         .setOrigin(0.5, 0)
         .setDepth(10);
@@ -106,7 +109,7 @@ export class TitleScene extends Phaser.Scene {
     g.fillRect(0, 0, W, H);
 
     // a big striped sun sinking into the horizon
-    const horizon = 160;
+    const horizon = Math.round(160 * S);
     const cx = W / 2;
     for (let y = 0; y < 90; y++) {
       const gap = y > 40 && y % 5 < (y - 40) / 8;
@@ -128,7 +131,7 @@ export class TitleScene extends Phaser.Scene {
       const y = Math.round(horizon + i * i * 1.8);
       g.lineBetween(0, y, W, y);
     }
-    for (let x = -300; x <= 780; x += 60) g.lineBetween(cx, horizon, x, H);
+    for (let x = -400; x <= W + 400; x += 60) g.lineBetween(cx, horizon, x, H);
     g.fillStyle(hex(PAL.pink), 1);
     g.fillRect(0, horizon, W, 1);
   }

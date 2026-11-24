@@ -3,6 +3,7 @@ import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
 import { rigLayout } from '../art/painters';
 import { ensurePirateTexture, ensureRigTextures } from '../art/textures';
+import { VIEW } from '../config/view';
 import { getState, setState } from '../game/session';
 import {
   applyBattleResult,
@@ -16,13 +17,13 @@ import type { Pirate } from '../sim/pirates';
 import { makeRng, randomSeed } from '../sim/rng';
 import { vehicleStats } from '../sim/vehicle';
 
-const W = 480;
-const H = 270;
-const PANEL_Y = 214;
+const W = VIEW.W;
+const H = VIEW.H;
+const PANEL_Y = H - 56;
 const SEGMENTS = 10;
-const ENEMY_X = 372;
-const RIG_PIVOT_X = 170;
-const RIG_Y = 168;
+const ENEMY_X = W - 108;
+const RIG_PIVOT_X = Math.round(W * 0.36);
+const RIG_Y = Math.round(H * 0.62);
 /** How long the log stays readable between rounds. */
 const ROUND_PAUSE_MS = 450;
 const RESULT_MS = 1500;
@@ -34,7 +35,9 @@ export interface BattleData {
 type Phase = 'choose' | 'resolving' | 'over';
 
 const RIG_SCALE = { scout: 3, hauler: 2, juggernaut: 1.5 } as const;
-const enemyYs = (n: number): number[] => (n === 1 ? [140] : n === 2 ? [105, 175] : [80, 140, 200]);
+const S = H / 270;
+const enemyYs = (n: number): number[] =>
+  (n === 1 ? [140] : n === 2 ? [105, 175] : [80, 140, 200]).map((y) => Math.round(y * S));
 
 /** Turn-based fight on its own screen. The world clock is frozen while this runs. */
 export class BattleScene extends Phaser.Scene {
@@ -210,7 +213,7 @@ export class BattleScene extends Phaser.Scene {
     g.fillRect(0, 0, W, H);
 
     // striped sun on the horizon
-    const horizon = 74;
+    const horizon = Math.round(H * 0.27);
     for (let y = 0; y < 36; y++) {
       if (y > 16 && y % 4 < (y - 16) / 5) continue;
       g.fillStyle(hex(PAL.SUN[Math.min(11, Math.floor(y / 3))]), 1);
@@ -308,7 +311,7 @@ export class BattleScene extends Phaser.Scene {
     items.forEach((item, i) => {
       const col = i % 3;
       const row = Math.floor(i / 3);
-      this.text(ctx, item.text, 10 + col * 160, PANEL_Y + 24 + row * 11, locked ? '#5a4a7a' : item.color);
+      this.text(ctx, item.text, 10 + col * 210, PANEL_Y + 24 + row * 11, locked ? '#5a4a7a' : item.color);
     });
     this.text(ctx, 'LEFT/RIGHT: TARGET', W - textWidth('LEFT/RIGHT: TARGET') - 6, H - 8, '#7a6a9a');
 

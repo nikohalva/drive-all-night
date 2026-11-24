@@ -19,7 +19,7 @@ import type { PirateGroup } from '../sim/pirate-fleet';
 import { Grace } from '../sim/pirates';
 import { makeRng, randomSeed } from '../sim/rng';
 import { loadGame } from '../sim/save';
-import { TERRAIN_SPEED, terrainAt } from '../sim/terrain';
+import { TERRAIN_SPEED, isPassable, terrainAt } from '../sim/terrain';
 import { addCargo, burnFuel, isBroken, transferToTank, vehicleStats } from '../sim/vehicle';
 import {
   cityPosition,
@@ -82,7 +82,7 @@ export class DriveScene extends Phaser.Scene {
     ui.message = null;
 
     this.ground = new GroundLayer(this, s.seed);
-    this.ground.prime(this.k.x, this.k.y);
+    this.ground.prime(Math.round(this.k.x - RIG_SCREEN_X), Math.round(this.k.y - RIG_SCREEN_Y));
     this.sparks = new ParticleLayer(this, s.seed);
     this.city = this.add.image(0, 0, ensureCityTexture(this)).setOrigin(1, CITY_DOCK_Y / CITY_H).setDepth(3);
     this.rig = this.add.image(0, 0, ensureRigTextures(this, s.vehicle)[0]).setDepth(10);
@@ -124,7 +124,7 @@ export class DriveScene extends Phaser.Scene {
       x >= cityPos.x - CITY_W && x <= cityPos.x && y >= cityTop && y <= cityTop + CITY_H;
     const startedInCity = inCity(k.x, k.y);
     const env: DriveEnv = {
-      blocked: (x, y) => terrainAt(prev.seed, x, y) === 'cliff' || (!startedInCity && inCity(x, y)),
+      blocked: (x, y) => !isPassable(terrainAt(prev.seed, x, y)) || (!startedInCity && inCity(x, y)),
       terrainSpeed: (x, y) => TERRAIN_SPEED[terrainAt(prev.seed, x, y)],
     };
 
@@ -225,7 +225,7 @@ export class DriveScene extends Phaser.Scene {
     const scrollY = Math.round(k.y - RIG_SCREEN_Y);
     this.cameras.main.setScroll(scrollX, scrollY);
 
-    this.ground.update(k.x, k.y);
+    this.ground.update(scrollX, scrollY);
     this.sparks.update(scrollX, scrollY, t, time);
     this.lighting.update({
       t,
