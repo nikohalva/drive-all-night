@@ -1,0 +1,68 @@
+import { BALANCE } from '../config/balance';
+import type { Rng } from './rng';
+import type { Zone } from './world';
+
+export interface Pirate {
+  name: string;
+  level: number;
+  hp: number;
+  maxHp: number;
+  damage: number;
+  accuracy: number;
+  armor: number;
+  speed: number;
+}
+
+const NAMES = ['Razor Kite', 'Ash Vulture', 'Neon Shrike', 'Gutter Hawk', 'Dust Raptor', 'Cinder Gull'];
+
+/** Chance per second that a pirate group shows up. Gentle during the easy start. */
+export function spawnChancePerSecond(zone: Zone, cargo: number, easy: boolean): number {
+  let chance = 0;
+  if (zone === 'sunset') chance = 0.02 + 0.0002 * cargo;
+  else if (zone === 'deep') chance = 0.004;
+  return easy ? chance * 0.25 : chance;
+}
+
+/** Pirates grow with the player's vehicle strength and with the cargo carried. */
+export function pirateLevel(strength: number, cargo: number, easy: boolean): number {
+  if (easy) return 1;
+  return Math.max(1, Math.round(0.5 * strength + cargo / 100));
+}
+
+export function makePirateGroup(rng: Rng, level: number, easy: boolean): Pirate[] {
+  const size = easy ? 1 : 1 + (level >= 6 ? 1 : 0) + (level >= 10 ? 1 : 0);
+  const group: Pirate[] = [];
+  for (let i = 0; i < size; i++) {
+    const hp = 20 + 8 * level;
+    group.push({
+      name: NAMES[Math.floor(rng() * NAMES.length) % NAMES.length],
+      level,
+      hp,
+      maxHp: hp,
+      damage: 4 + 2 * level,
+      accuracy: 0.65,
+      armor: Math.floor(level / 3),
+      speed: 70 + 4 * level,
+    });
+  }
+  return group;
+}
+
+/** Breathing room after a battle so the player is not trapped in a fight loop. */
+export class Grace {
+  private remaining = 0;
+
+  constructor(private readonly seconds: number = BALANCE.GRACE_SECONDS) {}
+
+  start(): void {
+    this.remaining = this.seconds;
+  }
+
+  tick(dt: number): void {
+    this.remaining = Math.max(0, this.remaining - dt);
+  }
+
+  get active(): boolean {
+    return this.remaining > 0;
+  }
+}
