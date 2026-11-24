@@ -54,6 +54,8 @@ export class DriveScene extends Phaser.Scene {
   private cities = new Map<CityId, Phaser.GameObjects.Image>();
   /** The city whose dock the rig is beside, if any. */
   private dockCity: CityId | null = null;
+  /** Scene time before which an M press does not open the map (see map-done). */
+  private mapReopenAt = 0;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: KeyMap;
 
@@ -106,7 +108,11 @@ export class DriveScene extends Phaser.Scene {
     this.events.off('city-done');
     this.events.on('city-done', this.onCityDone, this);
     this.events.off('map-done');
-    this.events.on('map-done', () => this.setFrozen(false));
+    this.events.on('map-done', () => {
+      // the M press that closed the map also reaches this scene; don't let it reopen the map
+      this.mapReopenAt = this.time.now + 250;
+      this.setFrozen(false);
+    });
 
     const kb = this.input.keyboard;
     if (!kb) throw new Error('keyboard input is required');
@@ -184,7 +190,7 @@ export class DriveScene extends Phaser.Scene {
     const dockPressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
     if (dockPressed && ui.nearDock && !this.frozen && !this.destroyedPending) this.enterCity();
     const mapPressed = Phaser.Input.Keyboard.JustDown(this.keys.M);
-    if (mapPressed && !this.frozen && !this.destroyedPending) this.openMap();
+    if (mapPressed && !this.frozen && !this.destroyedPending && this.time.now >= this.mapReopenAt) this.openMap();
     const helpPressed = Phaser.Input.Keyboard.JustDown(this.keys.H);
     if (helpPressed && ui.broken && !this.frozen && !this.destroyedPending && !this.rescue.active) this.rescue.begin();
 
