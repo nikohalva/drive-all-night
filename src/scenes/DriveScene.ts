@@ -15,6 +15,7 @@ import {
 import { caravanStats, isWrecked } from '../sim/caravan';
 import { advance } from '../sim/clock';
 import { Convoy } from '../sim/convoy';
+import { clearOffset, collectorLanes, easeOffset, offsetSpot } from '../sim/lanes';
 import { forwardSpeed, stepDriving, type DriveEnv, type Kinematics } from '../sim/driving';
 import { newGame } from '../sim/game-state';
 import { collect } from '../sim/particles';
@@ -97,6 +98,8 @@ export class DriveScene extends Phaser.Scene {
   private rigSig = '';
   private rigTextures: string[] = [];
   private convoy = new Convoy();
+  /** Current sideways offset of each collector from the column (by escort id). */
+  private flank = new Map<number, number>();
   private escortSprites = new Map<number, Phaser.GameObjects.Image>();
   /** Where each escort is on the road this frame (by escort id). */
   private escortSpots = new Map<number, { x: number; y: number; heading: number }>();
@@ -141,6 +144,7 @@ export class DriveScene extends Phaser.Scene {
     this.convoy.reset(this.k.x, this.k.y);
     this.escortSprites = new Map();
     this.escortSpots = new Map();
+    this.flank = new Map();
     this.mineSprites = new Map();
     for (const m of mineSites(s.seed)) {
       this.mineSprites.set(m.id, this.add.image(m.x, m.y, ensureMineTexture(this, true)).setDepth(3));
@@ -215,6 +219,18 @@ export class DriveScene extends Phaser.Scene {
     this.escortSpots = new Map(
       this.convoy.followers(prev.caravan.length, CONVOY_SPACING).map((f, i) => [prev.caravan[i].id, f]),
     );
+    // working collectors fan out to sweep their own lanes, tucking in around anything solid
+    const radii = caravan.collectors.map((c) => c.radius);
+    const bodyGap = rigLayout(prev.vehicle.hullId).w / 2 + 14;
+    const lanes = collectorLanes(bodyGap, stats.collectRadius, radii);
+    const offGround = (x: number, y: number): boolean => !isPassable(terrainAt(prev.seed, x, y)) || inCity(x, y);
+    caravan.collectors.forEach((c, i) => {
+      const spot = this.escortSpots.get(c.id);
+      if (!spot) return;
+      const offset = easeOffset(this.flank.get(c.id) ?? 0, clearOffset(spot, lanes[i], offGround), dt);
+      this.flank.set(c.id, offset);
+      this.escortSpots.set(c.id, { ...spot, ...offsetSpot(spot, offset) });
+    });
 
     let vehicle = prev.vehicle;
     if (dt > 0 && throttle !== 0) vehicle = burnFuel(vehicle, throttle, dt, caravan.fuelBurnExtra);
@@ -480,6 +496,7 @@ export class DriveScene extends Phaser.Scene {
     const p = getState().player;
     this.k = { x: p.x, y: p.y, heading: p.heading, vx: 0, vy: 0 };
     this.convoy.reset(p.x, p.y);
+    this.flank.clear();
     this.grace.start();
     this.frozen = false;
   }
