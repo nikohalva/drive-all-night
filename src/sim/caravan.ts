@@ -1,4 +1,5 @@
 import { CITY_BY_ID, START_CITY, cityPrice, type CityDef } from '../config/cities';
+import { CREW } from '../config/crew';
 import {
   CARAVAN_CAP,
   ESCORT_FUEL_PER_SECOND,
@@ -7,6 +8,7 @@ import {
   type EscortKind,
   type Tier,
 } from '../config/escorts';
+import { caravanBonus, crewBonus, driverSpeed, isCrewed, leadTopSpeed, rookie } from './crew';
 import type { TxResult } from './economy';
 import type { GameState } from './game-state';
 import { vehicleStats } from './vehicle';
@@ -36,6 +38,10 @@ export interface CaravanStats {
   fleeBonus: number;
   escorts: number;
   wrecked: number;
+  /** Whole vehicles with nobody fit aboard: towed along, doing nothing. */
+  idle: number;
+  /** Multiplier on fuel burned (the lead's driver). */
+  fuelFactor: number;
   /** Extra fuel per second at full throttle for towing everyone along. */
   fuelBurnExtra: number;
 }
@@ -46,18 +52,24 @@ export function caravanStats(s: GameState): CaravanStats {
   const lead = vehicleStats(s.vehicle);
   let cargoCap = lead.cargoCap;
   let tankCap = lead.tankCap;
-  let topSpeed = lead.topSpeed;
-  let sight = BASE_SIGHT;
-  let fleeBonus = 0;
+  let topSpeed = leadTopSpeed(s);
+  const comms = caravanBonus(s, 'comms');
+  let sight = BASE_SIGHT + CREW.COMMS_SIGHT * comms;
+  let fleeBonus = CREW.COMMS_FLEE * comms;
+  let idle = 0;
   let wrecked = 0;
   const collectors: { id: number; radius: number }[] = [];
   for (const e of s.caravan) {
     const def = escortDef(e.kind, e.tier);
     cargoCap += def.cargoCap;
     tankCap += def.tankCap;
-    topSpeed = Math.min(topSpeed, def.speed);
+    topSpeed = Math.min(topSpeed, driverSpeed(s, e.id, def.speed));
     if (isWrecked(e)) {
       wrecked++;
+      continue;
+    }
+    if (!isCrewed(s, e.id)) {
+      idle++;
       continue;
     }
     if (def.collectRadius > 0) collectors.push({ id: e.id, radius: def.collectRadius });
@@ -75,6 +87,8 @@ export function caravanStats(s: GameState): CaravanStats {
     fleeBonus,
     escorts: s.caravan.length,
     wrecked,
+    idle,
+    fuelFactor: 1 - CREW.DRIVER_FUEL * crewBonus(s, 'lead', 'driver'),
     fuelBurnExtra: s.caravan.length * ESCORT_FUEL_PER_SECOND,
   };
 }
@@ -94,6 +108,8 @@ export function buyEscort(s: GameState, kind: EscortKind, tier: Tier, city: City
       credits: s.credits - price,
       caravan: [...s.caravan, { id: s.nextEscortId, kind, tier, hp: def.hp }],
       nextEscortId: s.nextEscortId + 1,
+      crew: [...s.crew, rookie(s.seed, s.nextCrewId, kind, s.nextEscortId)],
+      nextCrewId: s.nextCrewId + 1,
     },
   };
 }
@@ -102,7 +118,13 @@ export function sellEscort(s: GameState, id: number): TxResult {
   const e = s.caravan.find((x) => x.id === id);
   if (!e) return fail('nothing');
   const refund = Math.floor(escortDef(e.kind, e.tier).price * ESCORT_RESALE);
-  const after: GameState = { ...s, credits: s.credits + refund, caravan: s.caravan.filter((x) => x.id !== id) };
+  const after: GameState = {
+    ...s,
+    credits: s.credits + refund,
+    caravan: s.caravan.filter((x) => x.id !== id),
+    // its people step off into the reserve
+    crew: s.crew.map((m) => (m.post === id ? { ...m, post: null } : m)),
+  };
   // what no longer fits goes with the vehicle that held it
   const caps = caravanStats(after);
   return {

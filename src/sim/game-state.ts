@@ -1,4 +1,5 @@
 import type { Escort } from './caravan';
+import type { CrewMember } from './crew';
 import { starterVehicle, type VehicleState } from './vehicle';
 import { cityPosition } from './world';
 
@@ -12,7 +13,7 @@ export interface GameFlags {
 }
 
 export interface GameState {
-  version: 4;
+  version: 5;
   seed: number;
   /** World seconds (play time with the world clock running). */
   t: number;
@@ -26,6 +27,11 @@ export interface GameState {
   /** Escort vehicles following the lead rig. */
   caravan: Escort[];
   nextEscortId: number;
+  /** Hired crew. The player, the Road Captain, is not in this list. */
+  crew: CrewMember[];
+  nextCrewId: number;
+  /** Recruit keys already signed on, so they are not offered again. */
+  hired: string[];
   /** Standing with each night baron you have dealt with (mine id -> relation). */
   barons: Record<string, { standing: number; allied: boolean }>;
 }
@@ -34,7 +40,7 @@ export interface GameState {
 export function newGame(seed: number): GameState {
   const city = cityPosition(0);
   return {
-    version: 4,
+    version: 5,
     seed,
     t: 0,
     player: { x: city.x + 40, y: city.y, heading: -Math.PI / 2 },
@@ -45,6 +51,9 @@ export function newGame(seed: number): GameState {
     known: [],
     caravan: [],
     nextEscortId: 1,
+    crew: [],
+    nextCrewId: 1,
+    hired: [],
     barons: {},
   };
 }

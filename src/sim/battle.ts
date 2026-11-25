@@ -1,6 +1,7 @@
 import { REPAIR_KIT } from '../config/catalog';
 import { escortDef, type EscortKind, type Row } from '../config/escorts';
 import { caravanStats, isWrecked } from './caravan';
+import { crewGun, driverSpeed, isCrewed, leadTopSpeed } from './crew';
 import type { GameState } from './game-state';
 import type { EnemyRole, Pirate } from './pirates';
 import type { Rng } from './rng';
@@ -78,14 +79,14 @@ export function startBattle(s: GameState, enemies: Pirate[], allies: Pirate[] = 
       hp: s.vehicle.hp,
       maxHp: stats.maxHp,
       armor: stats.armor,
-      speed: stats.topSpeed,
-      guns: stats.weapons.map((w) => ({ ...w })),
+      speed: leadTopSpeed(s),
+      guns: stats.weapons.map((w) => crewGun(s, 'lead', w)),
       longRange: false,
       heal: 0,
     },
   ];
   for (const e of s.caravan) {
-    if (isWrecked(e)) continue;
+    if (isWrecked(e) || !isCrewed(s, e.id)) continue;
     const def = escortDef(e.kind, e.tier);
     units.push({
       uid: `escort-${e.id}`,
@@ -96,8 +97,8 @@ export function startBattle(s: GameState, enemies: Pirate[], allies: Pirate[] = 
       hp: e.hp,
       maxHp: def.hp,
       armor: def.armor,
-      speed: def.speed,
-      guns: def.damage > 0 ? [{ name: def.name, damage: def.damage, accuracy: def.accuracy }] : [],
+      speed: driverSpeed(s, e.id, def.speed),
+      guns: def.damage > 0 ? [crewGun(s, e.id, { name: def.name, damage: def.damage, accuracy: def.accuracy })] : [],
       longRange: def.longRange,
       heal: def.heal,
       escortId: e.id,
@@ -262,7 +263,7 @@ export function resolveRound(b: BattleState, orders: Record<string, Order>, rng:
         if (u.role !== 'medic' || !ally || ally.side !== 'player' || !isAlive(ally)) break;
         const before = ally.hp;
         ally.hp = Math.min(ally.maxHp, ally.hp + u.heal);
-        log(`${u.name} patches ${ally.name} (+${ally.hp - before}).`);
+        log(`${u.name} patches ${ally.name} (+${Math.round(ally.hp - before)}).`);
         break;
       }
       case 'kit':

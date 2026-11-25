@@ -1,10 +1,13 @@
 import { HULLS, SLOT_TYPES } from '../config/catalog';
 import { ESCORT_KINDS } from '../config/escorts';
+import { CREW_ROLES, TRAIT_IDS } from '../config/crew';
+import type { EscortKind } from '../config/escorts';
+import { rookie } from './crew';
 import type { GameState } from './game-state';
 
 export const SAVE_KEY = 'drive-all-night/save-v1';
 /** The save format this build writes; older formats are upgraded on load. */
-export const CURRENT_SAVE_VERSION = 4;
+export const CURRENT_SAVE_VERSION = 5;
 
 export interface KV {
   getItem(k: string): string | null;
@@ -40,6 +43,13 @@ function looksLikeGameState(x: unknown): x is GameState {
     if (!isObj(e) || !isNum(e.id) || !isNum(e.hp) || ![1, 2, 3].includes(e.tier as number)) return false;
     if (!ESCORT_KINDS.includes(e.kind as never)) return false;
   }
+  if (!isNum(x.nextCrewId) || !Array.isArray(x.crew) || !Array.isArray(x.hired)) return false;
+  for (const m of x.crew) {
+    if (!isObj(m) || !isNum(m.id) || !isNum(m.health) || !isNum(m.face) || typeof m.name !== 'string') return false;
+    if (!CREW_ROLES.includes(m.role as never) || !TRAIT_IDS.includes(m.trait as never)) return false;
+    if (![0, 1, 2, 3].includes(m.skill as number)) return false;
+    if (m.post !== null && m.post !== 'lead' && !isNum(m.post)) return false;
+  }
   if (!isNum(x.seed) || !isNum(x.t) || !isNum(x.credits) || !isNum(x.debt)) return false;
 
   const p = x.player;
@@ -67,6 +77,14 @@ function upgrade(x: unknown): unknown {
   if (v.version === 1) v = { ...v, version: 2, known: [] };
   if (v.version === 2) v = { ...v, version: 3, caravan: [], nextEscortId: 1 };
   if (v.version === 3) v = { ...v, version: 4, barons: {} };
+  if (v.version === 4) {
+    // escorts now need someone aboard: give each one a green hand
+    const escorts = Array.isArray(v.caravan) ? v.caravan.filter(isObj) : [];
+    const crew = escorts
+      .filter((e) => ESCORT_KINDS.includes(e.kind as never))
+      .map((e, i) => rookie(Number(v.seed), i + 1, e.kind as EscortKind, Number(e.id)));
+    v = { ...v, version: 5, crew, nextCrewId: crew.length + 1, hired: [] };
+  }
   return v;
 }
 

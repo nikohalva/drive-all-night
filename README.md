@@ -11,6 +11,14 @@ The game is in **alpha**. Anything may still change.
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.3.0-alpha (2026-11-25)
+
+- Crew: driver, mechanic, gunner, comms and navigation, and medic, each with a name, a trait and a portrait. You are the Road Captain.
+- Every escort needs someone fit aboard to work; a bought escort comes with one green hand
+- Crew are wounded or killed when their vehicle takes damage, heal over time, or can be treated in a city
+- CREW tab in cities to hire; C to see, move and dismiss your people
+- Older saves are upgraded automatically
+
 ### 0.2.2-alpha (2026-11-25)
 
 - Version number on the title screen
