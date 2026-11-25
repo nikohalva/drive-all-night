@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { PAL } from '../art/palette';
+import { VERSION_LABEL } from '../config/version';
 import { VIEW } from '../config/view';
 import { ensureLabel, ensureRigTextures } from '../art/textures';
 import { resetDepletion, setState } from '../game/session';
@@ -69,6 +70,7 @@ export class TitleScene extends Phaser.Scene {
     });
     this.choice = 0;
 
+    this.add.image(W - 6, H - 10, ensureLabel(this, VERSION_LABEL, '#c8b8e8')).setOrigin(1, 0).setDepth(10);
     label('UP/DOWN + ENTER', W / 2, H - 20, '#7a6a9a', 1);
     this.add
       .image(W / 2, H - 10, ensureLabel(this, 'W/S/A/D OR ARROWS DRIVE   F FUEL   E DOCK   H HELP', '#7a6a9a'))
