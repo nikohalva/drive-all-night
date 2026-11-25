@@ -14,6 +14,7 @@ import {
 } from '../game/session';
 import { caravanStats, isWrecked } from '../sim/caravan';
 import { advance } from '../sim/clock';
+import { crewTime, isCrewed } from '../sim/crew';
 import { Convoy } from '../sim/convoy';
 import { clearOffset, collectorLanes, easeOffset, offsetSpot } from '../sim/lanes';
 import { forwardSpeed, stepDriving, type DriveEnv, type Kinematics } from '../sim/driving';
@@ -64,7 +65,7 @@ import { ParticleLayer } from './drive/particles-layer';
 import { PiratesMap } from './drive/pirates-map';
 import { RescueFlow } from './drive/rescue-flow';
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'F' | 'E' | 'H' | 'M', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'F' | 'E' | 'H' | 'M' | 'C', Phaser.Input.Keyboard.Key>;
 type CitySpot = { id: CityId; x: number; y: number };
 
 /** Pixels of ground travelled per tread animation frame. */
@@ -176,11 +177,16 @@ export class DriveScene extends Phaser.Scene {
       this.mapReopenAt = this.time.now + 250;
       this.setFrozen(false);
     });
+    this.events.off('crew-done');
+    this.events.on('crew-done', () => {
+      this.mapReopenAt = this.time.now + 250;
+      this.setFrozen(false);
+    });
 
     const kb = this.input.keyboard;
     if (!kb) throw new Error('keyboard input is required');
     this.cursors = kb.createCursorKeys();
-    this.keys = kb.addKeys('W,A,S,D,F,E,H,M') as KeyMap;
+    this.keys = kb.addKeys('W,A,S,D,F,E,H,M,C') as KeyMap;
 
     hooks.onDestroyed = (reason) => this.handleDestroyed(reason);
     if (!this.scene.isActive('hud')) this.scene.launch('hud');
@@ -233,7 +239,7 @@ export class DriveScene extends Phaser.Scene {
     });
 
     let vehicle = prev.vehicle;
-    if (dt > 0 && throttle !== 0) vehicle = burnFuel(vehicle, throttle, dt, caravan.fuelBurnExtra);
+    if (dt > 0 && throttle !== 0) vehicle = burnFuel(vehicle, throttle, dt * caravan.fuelFactor, caravan.fuelBurnExtra);
 
     if (!this.frozen && Phaser.Input.Keyboard.JustDown(this.keys.F)) vehicle = transferToTank(vehicle, caravan.tankCap);
 
@@ -258,7 +264,7 @@ export class DriveScene extends Phaser.Scene {
     const heat = heatDps(nk.y, tNew);
     if (heat > 0 && dt > 0) vehicle = { ...vehicle, hp: Math.max(0, vehicle.hp - heat * dt) };
 
-    setState({ ...prev, t: tNew, player: { x: nk.x, y: nk.y, heading: nk.heading }, vehicle });
+    setState(crewTime({ ...prev, t: tNew, player: { x: nk.x, y: nk.y, heading: nk.heading }, vehicle }, dt));
 
     // scouts widen how far the caravan sees; a mine is found once it comes into sight
     const found = discoverMines(getState(), nk.x, nk.y, caravan.sight);
@@ -294,6 +300,8 @@ export class DriveScene extends Phaser.Scene {
     else if (dockPressed && this.dockMine && !this.frozen && !this.destroyedPending) this.enterMine();
     const mapPressed = Phaser.Input.Keyboard.JustDown(this.keys.M);
     if (mapPressed && !this.frozen && !this.destroyedPending && this.time.now >= this.mapReopenAt) this.openMap();
+    const crewPressed = Phaser.Input.Keyboard.JustDown(this.keys.C);
+    if (crewPressed && !this.frozen && !this.destroyedPending && this.time.now >= this.mapReopenAt) this.openCrew();
     const helpPressed = Phaser.Input.Keyboard.JustDown(this.keys.H);
     if (helpPressed && ui.broken && !this.frozen && !this.destroyedPending && !this.rescue.active) this.rescue.begin();
 
@@ -331,14 +339,15 @@ export class DriveScene extends Phaser.Scene {
     for (const e of caravan) {
       const spot = this.escortSpots.get(e.id);
       if (!spot) continue;
-      const key = ensureEscortTextures(this, e.kind, e.tier)[isWrecked(e) ? 0 : phase];
+      const towed = isWrecked(e) || !isCrewed(getState(), e.id);
+      const key = ensureEscortTextures(this, e.kind, e.tier)[towed ? 0 : phase];
       let img = this.escortSprites.get(e.id);
       if (!img) {
         img = this.add.image(0, 0, key).setDepth(9);
         this.escortSprites.set(e.id, img);
       }
       img.setTexture(key).setPosition(spot.x, spot.y).setRotation(spot.heading + Math.PI / 2);
-      if (isWrecked(e)) img.setTint(0x555566).setAlpha(0.8);
+      if (towed) img.setTint(0x555566).setAlpha(0.8);
       else img.clearTint().setAlpha(1);
     }
   }
@@ -488,6 +497,13 @@ export class DriveScene extends Phaser.Scene {
     this.frozen = true;
     this.k = { ...this.k, vx: 0, vy: 0 };
     this.scene.launch('map');
+  }
+
+  /** The crew roster; the clock stops until it closes. */
+  private openCrew(): void {
+    this.frozen = true;
+    this.k = { ...this.k, vx: 0, vy: 0 };
+    this.scene.launch('crew', { from: 'drive' });
   }
 
   /** Back from the city: the menu has placed the rig beside the dock. */

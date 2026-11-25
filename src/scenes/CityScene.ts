@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
+import { PORTRAIT, portrait } from '../art/portraits';
+import { ROLE_EFFECT, ROLE_NAME, SKILL_NAME, TRAITS } from '../config/crew';
+import { hireCrew, recruitPool, treatCrew, treatmentCost } from '../sim/crew';
 import { PAL } from '../art/palette';
 import { rigSignature } from '../art/painters';
 import { ensureRigTextures } from '../art/textures';
@@ -29,7 +32,7 @@ import { buyEscort, caravanStats, repairEscorts, sellEscort } from '../sim/carav
 
 const W = VIEW.W;
 const H = VIEW.H;
-const TABS = ['SELL', 'SHOP', 'GARAGE', 'CARAVAN', 'SERVICES', 'SAVE', 'LEAVE'] as const;
+const TABS = ['SELL', 'SHOP', 'GARAGE', 'CARAVAN', 'CREW', 'SERVICES', 'SAVE', 'LEAVE'] as const;
 
 /** What a row on the CARAVAN tab does. */
 type CaravanEntry =
@@ -49,7 +52,7 @@ const RIG_SCALE: Record<HullId, number> = { scout: 3, hauler: 2, juggernaut: 1.5
 
 const REASONS: Record<string, string> = {
   credits: 'NOT ENOUGH CREDITS',
-  slot: 'NO FREE SLOT',
+  slot: 'NO FREE SLOT OR SEAT',
   'not-owned': 'NOT IN YOUR GARAGE',
   nothing: 'NOTHING TO DO',
   required: 'EVERY RIG NEEDS AN ENGINE AND A TANK',
@@ -106,6 +109,14 @@ export class CityScene extends Phaser.Scene {
     this.message = { text: saved ? 'DOCKED. GAME AUTOSAVED' : 'DOCKED. COULD NOT SAVE', good: saved };
 
     this.bindKeys();
+    this.events.off('crew-done');
+    this.events.on('crew-done', () => {
+      // the Esc that closed the roster also reaches this scene; stay locked until it has passed
+      this.time.delayedCall(250, () => {
+        this.locked = false;
+        this.lastSig = '';
+      });
+    });
     this.events.off('victory-done');
     this.events.on('victory-done', () => {
       this.locked = false;
@@ -205,7 +216,8 @@ export class CityScene extends Phaser.Scene {
   private choose(): void {
     if (this.locked) return;
     const s = getState();
-    const cursor = this.cursors[this.tab];
+    const cursor = Math.min(this.cursors[this.tab], this.rows().length - 1);
+    this.cursors[this.tab] = cursor;
     switch (this.current()) {
       case 'SELL': {
         const proceeds = Math.floor(s.vehicle.cargo * this.city.sellPrice);
@@ -238,8 +250,19 @@ export class CityScene extends Phaser.Scene {
       case 'CARAVAN':
         this.chooseCaravan(s, cursor);
         return;
+      case 'CREW': {
+        if (cursor === 0) {
+          this.locked = true;
+          this.scene.launch('crew', { from: 'city' });
+          return;
+        }
+        const recruit = recruitPool(s, this.city)[cursor - 1];
+        if (recruit) this.apply(hireCrew(s, this.city, recruit.key), `${recruit.name} SIGNS ON`);
+        break;
+      }
       case 'SERVICES':
-        if (cursor === 0) this.apply(repairFull(s, this.city), 'HULL REPAIRED');
+        if (cursor === 2) this.apply(treatCrew(s), 'CREW PATCHED UP');
+        else if (cursor === 0) this.apply(repairFull(s, this.city), 'HULL REPAIRED');
         else this.apply(refuelFull(s, this.city), 'TANK REFUELLED');
         break;
       case 'SAVE':
@@ -357,6 +380,22 @@ export class CityScene extends Phaser.Scene {
           };
         });
       }
+      case 'CREW':
+        return [
+          {
+            text: 'MANAGE YOUR CREW',
+            right: `${s.crew.length} HIRED`,
+            color: PAL.cyan,
+            detail: 'SEE, MOVE AND DISMISS. ALSO C ON THE ROAD',
+          },
+          ...recruitPool(s, this.city).map((r) => ({
+            text: `HIRE ${r.name}  ${SKILL_NAME[r.skill]} ${ROLE_NAME[r.role]}`,
+            right: `${r.price} CR`,
+            color: PAL.amber,
+            dim: s.credits < r.price,
+            detail: `${ROLE_EFFECT[r.role]}. ${TRAITS[r.trait].name}`,
+          })),
+        ];
       case 'SERVICES': {
         const stats = vehicleStats(s.vehicle);
         const repairCost = Math.ceil((stats.maxHp - s.vehicle.hp) * this.city.repairPrice);
@@ -375,6 +414,13 @@ export class CityScene extends Phaser.Scene {
             color: PAL.amber,
             dim: fuelCost <= 0,
             detail: `FUEL ${s.vehicle.fuel.toFixed(0)}/${caravanStats(s).tankCap}. PARTICLE X IS FUEL`,
+          },
+          {
+            text: 'TREAT CREW',
+            right: `${treatmentCost(s)} CR`,
+            color: PAL.cyanPale,
+            dim: treatmentCost(s) <= 0,
+            detail: 'CITY DOCTORS BRING EVERYONE BACK TO FULL HEALTH',
           },
         ];
       }
@@ -425,6 +471,7 @@ export class CityScene extends Phaser.Scene {
       cr: s.credits,
       d: s.debt,
       v: s.vehicle,
+      p: s.crew,
     });
     if (sig === this.lastSig) return;
     this.lastSig = sig;
@@ -507,13 +554,24 @@ export class CityScene extends Phaser.Scene {
     this.panel(ctx, SIDE_X, LIST_Y + 154, SIDE_W, 92);
     const lines = [
       `HULL ${Math.ceil(s.vehicle.hp)}/${stats.maxHp}  ARMOR ${stats.armor}`,
-      `SPEED ${caravan.topSpeed}  SWEEP ${stats.collectRadius}`,
+      `SPEED ${Math.round(caravan.topSpeed)}  SWEEP ${stats.collectRadius}`,
       `FUEL ${s.vehicle.fuel.toFixed(0)}/${caravan.tankCap}`,
       `CARGO ${s.vehicle.cargo.toFixed(0)}/${caravan.cargoCap}  KITS ${s.vehicle.repairKits}`,
       `CARAVAN ${caravan.escorts}/${CARAVAN_CAP[s.vehicle.hullId]}${caravan.wrecked ? `  ${caravan.wrecked} WRECKED` : ''}`,
       ...stats.weapons.map((w, i) => `GUN ${i + 1} ${w.name.toUpperCase()} ${w.damage}`),
     ];
     lines.slice(0, 9).forEach((line, i) => this.text(ctx, line, SIDE_X + 6, LIST_Y + 160 + i * 9, i < 5 ? PAL.white : PAL.amber));
+
+    // the face of the recruit being considered covers the rig
+    const face = this.current() === 'CREW' && cursor > 0 ? recruitPool(s, this.city)[cursor - 1] : undefined;
+    this.rig.setVisible(!face);
+    if (face) {
+      const size = PORTRAIT * 5;
+      const px = SIDE_X + Math.floor((SIDE_W - size) / 2);
+      ctx.drawImage(portrait(face.face, face.role), px, LIST_Y + 6, size, size);
+      this.text(ctx, face.name, SIDE_X + 6, LIST_Y + 134, PAL.white);
+      this.text(ctx, TRAITS[face.trait].line, SIDE_X + 6, LIST_Y + 143, '#b8a8d8');
+    }
 
     // message
     this.panel(ctx, 0, H - 14, W, 14);

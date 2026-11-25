@@ -6,6 +6,7 @@ import { VIEW } from '../config/view';
 import { getState, ui } from '../game/session';
 import { planetTimeLabel } from '../sim/clock';
 import { caravanStats } from '../sim/caravan';
+import { isFit } from '../sim/crew';
 import { vehicleStats } from '../sim/vehicle';
 import { CITIES } from '../config/cities';
 import { behindSunset, cityPositions, secondsUntilDawn, zoneAt } from '../sim/world';
@@ -24,6 +25,9 @@ interface HudData {
   credits: number;
   escorts: number;
   wrecked: number;
+  idle: number;
+  hurt: number;
+  down: number;
   debt: number;
   mapPlayer: number;
   mapCities: number[];
@@ -84,6 +88,9 @@ export class HudScene extends Phaser.Scene {
       cargo: Math.ceil(clamp01(s.vehicle.cargo / caravan.cargoCap) * SEGMENTS),
       escorts: caravan.escorts,
       wrecked: caravan.wrecked,
+      idle: caravan.idle,
+      hurt: s.crew.filter((m) => m.health < 100 && isFit(m)).length,
+      down: s.crew.filter((m) => !isFit(m)).length,
       hull: Math.ceil(clamp01(s.vehicle.hp / stats.maxHp) * SEGMENTS),
       credits: Math.floor(s.credits),
       debt: Math.floor(s.debt),
@@ -139,10 +146,16 @@ export class HudScene extends Phaser.Scene {
       drawText(ctx, `DEBT ${d.debt}`, infoX, BAR_Y + 14, PAL.red);
       infoX += textWidth(`DEBT ${d.debt}`) + 8;
     }
-    if (d.escorts > 0) {
-      drawText(ctx, `CARAVAN ${d.escorts}`, infoX, BAR_Y + 14, PAL.cyanPale);
-      if (d.wrecked > 0) drawText(ctx, `(${d.wrecked} WRECKED)`, infoX + textWidth(`CARAVAN ${d.escorts}`) + 4, BAR_Y + 14, PAL.red);
-    }
+    const info = (text: string, color: string): void => {
+      drawText(ctx, text, infoX, BAR_Y + 14, color);
+      infoX += textWidth(text) + 8;
+    };
+    if (d.escorts > 0) info(`CARAVAN ${d.escorts}`, PAL.cyanPale);
+    if (d.wrecked > 0) info(`${d.wrecked} WRECKED`, PAL.red);
+    if (d.idle > 0) info(`${d.idle} NO CREW`, PAL.red);
+    if (d.down > 0) info(`${d.down} DOWN`, PAL.red);
+    if (d.hurt > 0) info(`${d.hurt} HURT`, PAL.amber);
+    info('C CREW', '#7a6a9a');
 
     // strip map: dawn on the left, sunset on the right
     for (let i = 0; i < MAP_W; i++) {

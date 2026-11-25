@@ -21,6 +21,7 @@ import {
   type OrderType,
   type Unit,
 } from '../sim/battle';
+import { applyInjuries } from '../sim/crew';
 import type { Pirate } from '../sim/pirates';
 import { makeRng, randomSeed } from '../sim/rng';
 
@@ -296,7 +297,7 @@ export class BattleScene extends Phaser.Scene {
   private finish(): void {
     const state = getState();
     const loot = this.battle.outcome === 'won' ? battleLoot(this.enemies0, this.rng) : { credits: 0, cargo: 0 };
-    const next = applyBattleResult(state, this.battle, loot);
+    const { state: next, report } = applyInjuries(state, applyBattleResult(state, this.battle, loot), this.rng);
     setState(next);
     const wrecked = next.caravan.filter((e) => e.hp <= 0).length - state.caravan.filter((e) => e.hp <= 0).length;
     if (this.battle.outcome === 'won') {
@@ -308,7 +309,10 @@ export class BattleScene extends Phaser.Scene {
       this.resultLines = ['THEY STRIPPED YOUR CARGO'];
     }
     if (wrecked > 0) this.resultLines.push(`${wrecked} ESCORT${wrecked > 1 ? 'S' : ''} WRECKED - REPAIR IN A CITY`);
-    this.time.delayedCall(RESULT_MS, () => {
+    if (report.length > 4) report.splice(3, report.length - 3, `AND ${report.length - 3} MORE CASUALTIES`);
+    this.resultLines.push(...report);
+    // casualties need time to be read
+    this.time.delayedCall(RESULT_MS + report.length * 700, () => {
       const outcome = this.battle.outcome;
       this.scene.stop();
       this.scene.get('drive').events.emit('battle-done', outcome);
