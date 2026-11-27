@@ -90,6 +90,25 @@ test('parts can be moved off the old rig, but not its only engine or tank', () =
   expect(ok(unfitEscort(s, 'citadel', id, 'weapon', 0)).caravan[0].rig?.fitted.weapon).toEqual([null]);
 });
 
+test('a save from before rigs were kept gets its starting rig back, once', () => {
+  const before = (hullId: 'scout' | 'hauler' | 'juggernaut') => {
+    const s = JSON.parse(serialize(newGame(1)));
+    s.version = 8;
+    s.vehicle.hullId = hullId;
+    return deserialize(JSON.stringify(s))!;
+  };
+  for (const hull of ['hauler', 'juggernaut'] as const) {
+    const s = before(hull);
+    const [rig] = s.garages.citadel!.vehicles;
+    expect(rig).toMatchObject({ id: 1, kind: 'rig', tier: 1, hp: 60 });
+    expect(rig.rig).toMatchObject({ hullId: 'scout', fitted: { engine: ['engine-1'], weapon: ['weapon-1'] } });
+    expect(s.nextEscortId).toBe(2);
+    // loading the upgraded save again adds nothing
+    expect(deserialize(serialize(s))).toEqual(s);
+  }
+  expect(before('scout').garages.citadel!.vehicles).toEqual([]);
+});
+
 test('a parked rig is saved', () => {
   const s = upgraded();
   expect(deserialize(serialize(s))).toEqual(s);

@@ -16,7 +16,7 @@ export interface GameFlags {
 }
 
 export interface GameState {
-  version: 8;
+  version: 9;
   seed: number;
   /** World seconds (play time with the world clock running). */
   t: number;
@@ -49,7 +49,7 @@ export interface GameState {
 export function newGame(seed: number): GameState {
   const city = cityPosition(0);
   return {
-    version: 8,
+    version: 9,
     seed,
     t: 0,
     player: { x: city.x + 40, y: city.y, heading: -Math.PI / 2 },

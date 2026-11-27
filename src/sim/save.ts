@@ -5,10 +5,11 @@ import { HOME_GARAGE } from '../config/holdings';
 import type { EscortKind } from '../config/escorts';
 import { rookie } from './crew';
 import type { GameState } from './game-state';
+import { starterVehicle } from './vehicle';
 
 export const SAVE_KEY = 'drive-all-night/save-v1';
 /** The save format this build writes; older formats are upgraded on load. */
-export const CURRENT_SAVE_VERSION = 8;
+export const CURRENT_SAVE_VERSION = 9;
 
 export interface KV {
   getItem(k: string): string | null;
@@ -92,6 +93,30 @@ function looksLikeGameState(x: unknown): x is GameState {
   return ['easyStartOver', 'firstRescueUsed', 'won', 'victoryShown'].every((k) => typeof f[k] === 'boolean');
 }
 
+/**
+ * Buying a bigger hull used to throw the old one away. Anyone who has upgraded gets a starting
+ * rig back, parked in the home garage.
+ */
+function returnStartingRig(v: Record<string, unknown>): Record<string, unknown> {
+  const { vehicle, garages, nextEscortId } = v;
+  if (!isObj(vehicle) || vehicle.hullId === 'scout' || !isObj(garages) || !isNum(nextEscortId)) return v;
+  const home = garages[HOME_GARAGE];
+  if (!isObj(home) || !Array.isArray(home.vehicles)) return v;
+  const starter = starterVehicle();
+  const rig = {
+    id: nextEscortId,
+    kind: 'rig',
+    tier: 1,
+    hp: starter.hp,
+    rig: { hullId: starter.hullId, fitted: starter.fitted },
+  };
+  return {
+    ...v,
+    garages: { ...garages, [HOME_GARAGE]: { ...home, vehicles: [...home.vehicles, rig] } },
+    nextEscortId: (nextEscortId as number) + 1,
+  };
+}
+
 /** Bring an older save up to the current format; leaves anything unrecognised alone. */
 function upgrade(x: unknown): unknown {
   if (!isObj(x) || typeof x.version !== 'number') return x;
@@ -116,6 +141,7 @@ function upgrade(x: unknown): unknown {
     const crew = Array.isArray(v.crew) ? v.crew.map((m) => (isObj(m) ? { ...m, owed: 0, missed: 0 } : m)) : v.crew;
     v = { ...v, version: 8, crew };
   }
+  if (v.version === 8) v = { ...returnStartingRig(v), version: 9 };
   return v;
 }
 
