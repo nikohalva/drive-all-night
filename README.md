@@ -6,6 +6,8 @@ Play: https://nikohalva.github.io/drive-all-night/
 
 The game is in **alpha**. Anything may still change.
 
+Components, upgrades and rules: [game reference](docs/reference.md).
+
 ## Version history
 
 Newest first. The version number lives in `package.json` and is shown on the title screen.
