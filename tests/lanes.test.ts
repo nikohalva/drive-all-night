@@ -60,7 +60,7 @@ function harvest(radii: number[]): number {
   for (let y = 12000; y > 4000; y -= 1.3) {
     convoy.record(2048, y);
     total += collect(5, map, 2048, y + 11, 8, 0);
-    convoy.followers(radii.length, 34).forEach((f, i) => {
+    convoy.followers(radii.map((_, i) => 34 * (i + 1))).forEach((f, i) => {
       const p = offsetSpot(f, lanes[i]);
       total += collect(5, map, p.x, p.y, radii[i], 0);
     });

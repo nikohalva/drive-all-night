@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CITY_DOCK_Y, CITY_H, CITY_W, rigLayout, rigSignature } from '../art/painters';
+import { CITY_DOCK_Y, CITY_H, CITY_W, ESCORT_H, rigLayout, rigSignature } from '../art/painters';
 import { ensureCityTexture, ensureCaravanTextures, ensureMineTexture, ensureRigTextures } from '../art/textures';
 import { BALANCE } from '../config/balance';
 import { CITIES, CITY_BY_ID, type CityId } from '../config/cities';
@@ -15,7 +15,7 @@ import {
 import { caravanStats, isWrecked } from '../sim/caravan';
 import { advance } from '../sim/clock';
 import { crewTime, isCrewed } from '../sim/crew';
-import { Convoy } from '../sim/convoy';
+import { Convoy, convoyDistances } from '../sim/convoy';
 import { clearOffset, collectorLanes, easeOffset, offsetSpot } from '../sim/lanes';
 import { forwardSpeed, stepDriving, type DriveEnv, type Kinematics } from '../sim/driving';
 import { newGame } from '../sim/game-state';
@@ -72,8 +72,6 @@ type CitySpot = { id: CityId; x: number; y: number };
 
 /** Pixels of ground travelled per tread animation frame. */
 const TREAD_STEP = 2.5;
-/** Gap between vehicles in the convoy, in px. */
-const CONVOY_SPACING = 34;
 
 /** The real-time driving scene: world, Particle X, sun hazards and the rig. */
 export class DriveScene extends Phaser.Scene {
@@ -226,8 +224,17 @@ export class DriveScene extends Phaser.Scene {
     }
     const nk = this.k;
     this.convoy.record(nk.x, nk.y);
+    const leadLayout = rigLayout(prev.vehicle.hullId);
     this.escortSpots = new Map(
-      this.convoy.followers(prev.caravan.length, CONVOY_SPACING).map((f, i) => [prev.caravan[i].id, f]),
+      this.convoy
+        .followers(
+          convoyDistances(
+            leadLayout.h - leadLayout.pivotY,
+            // old rigs are far longer than bought escorts
+            prev.caravan.map((e) => (e.rig ? rigLayout(e.rig.hullId).h : ESCORT_H)),
+          ),
+        )
+        .map((f, i) => [prev.caravan[i].id, f]),
     );
     // working collectors fan out to sweep their own lanes, tucking in around anything solid
     const radii = caravan.collectors.map((c) => c.radius);

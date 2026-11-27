@@ -13,6 +13,10 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.10.1-alpha (2026-11-28)
+
+- Fix: caravan vehicles no longer ride underneath a big rig or an old rig; the column spaces itself by vehicle length
+
 ### 0.10.0-alpha (2026-11-28)
 
 - Buying a bigger rig no longer loses the old one: it is parked with its parts, to drive again, take into the caravan or sell
