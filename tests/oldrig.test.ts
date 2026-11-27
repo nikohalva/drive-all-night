@@ -6,7 +6,7 @@ import { escortStats } from '../src/sim/escort-stats';
 import { driveRig, sellStored, takeEscort, parkEscort } from '../src/sim/garage';
 import { newGame, type GameState } from '../src/sim/game-state';
 import { fitEscort, unfitEscort } from '../src/sim/outfit';
-import { deserialize, serialize } from '../src/sim/save';
+import { deserialize, loadGame, SAVE_KEY, serialize } from '../src/sim/save';
 import { CITY_BY_ID } from '../src/config/cities';
 
 const ok = (r: { ok: boolean; state?: GameState }): GameState => {
@@ -95,7 +95,7 @@ test('a save from before rigs were kept gets its starting rig back, once', () =>
     const s = JSON.parse(serialize(newGame(1)));
     s.version = 8;
     s.vehicle.hullId = hullId;
-    return deserialize(JSON.stringify(s))!;
+    return deserialize(JSON.stringify(s), '0.10.0-alpha')!;
   };
   for (const hull of ['hauler', 'juggernaut'] as const) {
     const s = before(hull);
@@ -107,6 +107,29 @@ test('a save from before rigs were kept gets its starting rig back, once', () =>
     expect(deserialize(serialize(s))).toEqual(s);
   }
   expect(before('scout').garages.citadel!.vehicles).toEqual([]);
+});
+
+const upgradedSave = (): string => {
+  const s = JSON.parse(serialize(newGame(1)));
+  s.version = 8;
+  s.vehicle.hullId = 'hauler';
+  return JSON.stringify(s);
+};
+
+test('the starting rig is only handed back by version 0.10.0', () => {
+  for (const later of ['0.10.1-alpha', '0.11.0-alpha', '1.0.0']) {
+    const s = deserialize(upgradedSave(), later)!;
+    expect(s.garages.citadel!.vehicles).toEqual([]);
+    expect(s.version).toBe(9);
+  }
+});
+
+test('loading an older save stores the upgrade, so a rig given back stays given', () => {
+  const store = new Map([[SAVE_KEY, upgradedSave()]]);
+  const kv = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+  const first = loadGame(kv, '0.10.0-alpha')!;
+  expect(first.garages.citadel!.vehicles).toHaveLength(1);
+  expect(loadGame(kv, '0.11.0-alpha')).toEqual(first);
 });
 
 test('a parked rig is saved', () => {

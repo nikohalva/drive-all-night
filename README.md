@@ -17,7 +17,7 @@ A new feature raises the middle number, a fix or small addition the last one.
 
 - Buying a bigger rig no longer loses the old one: it is parked with its parts, to drive again, take into the caravan or sell
 - The new rig arrives with basic gear, and the shop asks before you buy it
-- Saves that had already upgraded get a starting rig back in the Dusk Citadel garage
+- Saves that had already upgraded get a starting rig back in the Dusk Citadel garage. Only this version does that, so load your save before the next update.
 
 ### 0.9.0-alpha (2026-11-28)
 

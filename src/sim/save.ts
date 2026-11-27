@@ -4,6 +4,7 @@ import { CREW_ROLES, TRAIT_IDS } from '../config/crew';
 import { HOME_GARAGE } from '../config/holdings';
 import type { EscortKind } from '../config/escorts';
 import { rookie } from './crew';
+import { version as appVersion } from '../../package.json';
 import type { GameState } from './game-state';
 import { starterVehicle } from './vehicle';
 
@@ -93,6 +94,9 @@ function looksLikeGameState(x: unknown): x is GameState {
   return ['easyStartOver', 'firstRescueUsed', 'won', 'victoryShown'].every((k) => typeof f[k] === 'boolean');
 }
 
+/** The one release that hands lost starting rigs back. */
+const COMPENSATION_VERSION = '0.10.0-alpha';
+
 /**
  * Buying a bigger hull used to throw the old one away. Anyone who has upgraded gets a starting
  * rig back, parked in the home garage.
@@ -118,7 +122,7 @@ function returnStartingRig(v: Record<string, unknown>): Record<string, unknown> 
 }
 
 /** Bring an older save up to the current format; leaves anything unrecognised alone. */
-function upgrade(x: unknown): unknown {
+function upgrade(x: unknown, release: string): unknown {
   if (!isObj(x) || typeof x.version !== 'number') return x;
   let v: Record<string, unknown> = { ...x };
   if (v.version === 1) v = { ...v, version: 2, known: [] };
@@ -141,15 +145,15 @@ function upgrade(x: unknown): unknown {
     const crew = Array.isArray(v.crew) ? v.crew.map((m) => (isObj(m) ? { ...m, owed: 0, missed: 0 } : m)) : v.crew;
     v = { ...v, version: 8, crew };
   }
-  if (v.version === 8) v = { ...returnStartingRig(v), version: 9 };
+  if (v.version === 8) v = { ...(release === COMPENSATION_VERSION ? returnStartingRig(v) : v), version: 9 };
   return v;
 }
 
 /** Parse a stored save; anything missing, corrupt or from another version is null. */
-export function deserialize(raw: string | null): GameState | null {
+export function deserialize(raw: string | null, release: string = appVersion): GameState | null {
   if (!raw) return null;
   try {
-    const parsed = upgrade(JSON.parse(raw));
+    const parsed = upgrade(JSON.parse(raw), release);
     return looksLikeGameState(parsed) ? parsed : null;
   } catch {
     return null;
@@ -166,10 +170,14 @@ export function saveGame(s: GameState, kv: KV | null = safeStorage()): boolean {
   }
 }
 
-export function loadGame(kv: KV | null = safeStorage()): GameState | null {
+export function loadGame(kv: KV | null = safeStorage(), release: string = appVersion): GameState | null {
   if (!kv) return null;
   try {
-    return deserialize(kv.getItem(SAVE_KEY));
+    const raw = kv.getItem(SAVE_KEY);
+    const state = deserialize(raw, release);
+    // an upgraded save is written back at once, so what the upgrade gave is not lost
+    if (state && JSON.parse(raw as string).version !== CURRENT_SAVE_VERSION) saveGame(state, kv);
+    return state;
   } catch {
     return null;
   }
