@@ -1,5 +1,8 @@
 /** City garages: where spare parts and vehicles wait for you. */
+import { HULLS } from '../config/catalog';
+import { LEAD_SEATS } from '../config/crew';
 import { CARAVAN_CAP } from '../config/escorts';
+import { vehicleResale } from './escort-stats';
 import type { CityId } from '../config/cities';
 import { GARAGE_PRICE, GARAGE_RENT, GARAGE_VEHICLES, RENT_SECONDS, SPARE_SLOTS } from '../config/holdings';
 import { caravanStats, type Escort } from './caravan';
@@ -33,6 +36,10 @@ const put = (s: GameState, city: CityId, patch: Partial<Garage>): GameState => (
   ...s,
   garages: { ...s.garages, [city]: { ...garageAt(s, city), ...patch } },
 });
+
+/** Put a vehicle into a garage, whether or not it was in the caravan. */
+export const parkVehicle = (s: GameState, city: CityId, e: Escort): GameState =>
+  put(s, city, { vehicles: [...garageAt(s, city).vehicles, e] });
 
 export function buyGarage(s: GameState, city: CityId): TxResult {
   if (garageAt(s, city).owned) return fail('nothing');
@@ -95,4 +102,46 @@ export function takeEscort(s: GameState, city: CityId, id: number): TxResult {
   if (!e || !hasGarage(s, city)) return fail('nothing');
   if (s.caravan.length >= CARAVAN_CAP[s.vehicle.hullId]) return fail('slot');
   return done(put({ ...s, caravan: [...s.caravan, e] }, city, { vehicles: vehicles.filter((x) => x.id !== id) }));
+}
+
+/** Switch to a parked rig; the one you were driving takes its place in the garage. */
+export function driveRig(s: GameState, city: CityId, id: number): TxResult {
+  const { vehicles } = garageAt(s, city);
+  const picked = vehicles.find((x) => x.id === id);
+  if (!picked?.rig || !hasGarage(s, city)) return fail('nothing');
+  const { hullId, fitted } = picked.rig;
+  if (s.caravan.length > CARAVAN_CAP[hullId]) return fail('slot');
+  const parked: Escort = {
+    id: s.nextEscortId,
+    kind: 'rig',
+    tier: HULLS[s.vehicle.hullId].tier,
+    hp: s.vehicle.hp,
+    rig: { hullId: s.vehicle.hullId, fitted: s.vehicle.fitted },
+  };
+  // anyone without a seat in the other cab waits in the reserve
+  let seats = LEAD_SEATS[hullId];
+  const crew = s.crew.map((m) => (m.post === 'lead' && seats-- <= 0 ? { ...m, post: null } : m));
+  const swapped = put(
+    { ...s, vehicle: { ...s.vehicle, hullId, fitted, hp: picked.hp }, crew, nextEscortId: s.nextEscortId + 1 },
+    city,
+    { vehicles: [...vehicles.filter((x) => x.id !== id), parked] },
+  );
+  const caps = caravanStats(swapped);
+  const vehicle = {
+    ...swapped.vehicle,
+    fuel: Math.min(swapped.vehicle.fuel, caps.tankCap),
+    cargo: Math.min(swapped.vehicle.cargo, caps.cargoCap),
+  };
+  return done({ ...swapped, vehicle });
+}
+
+/** Sell a parked rig with everything on it. */
+export function sellStored(s: GameState, city: CityId, id: number): TxResult {
+  const { vehicles } = garageAt(s, city);
+  const e = vehicles.find((x) => x.id === id);
+  if (!e?.rig || !hasGarage(s, city)) return fail('nothing');
+  const value = vehicleResale(e);
+  const toDebt = Math.min(s.debt, value);
+  const paid = { ...s, debt: s.debt - toDebt, credits: s.credits + (value - toDebt) };
+  return done(put(paid, city, { vehicles: vehicles.filter((x) => x.id !== id) }));
 }

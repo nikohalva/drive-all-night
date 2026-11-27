@@ -2,10 +2,10 @@ import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PORTRAIT, portrait } from '../art/portraits';
 import { PAY_PERIOD, ROLE_EFFECT, ROLE_NAME, SKILL_NAME, TRAITS, WAGE } from '../config/crew';
-import { BANK_STEP, GARAGE_PRICE, GARAGE_RENT, GARAGE_VEHICLES, RENT_SECONDS, SPARE_SLOTS } from '../config/holdings';
+import { BANK_STEP, HOME_GARAGE, GARAGE_PRICE, GARAGE_RENT, GARAGE_VEHICLES, RENT_SECONDS, SPARE_SLOTS } from '../config/holdings';
 import { PARTS } from '../config/catalog';
 import { asOnePurse, deposit, funds, payInCity, withdraw } from '../sim/bank';
-import { buyGarage, garageAt, hasGarage, parkEscort, rentGarage, storePart, takeEscort, takePart } from '../sim/garage';
+import { buyGarage, garageAt, hasGarage, parkEscort, rentGarage, storePart, takeEscort, takePart, driveRig, sellStored } from '../sim/garage';
 import { crewAt, hireCrew, isCrewed, payWages, recruitPool, settlePayday, treatCrew, treatmentCost, wagesDue } from '../sim/crew';
 import { PAL } from '../art/palette';
 import { rigSignature } from '../art/painters';
@@ -26,12 +26,12 @@ import { hash2 } from '../sim/rng';
 import { saveGame } from '../sim/save';
 import { cycleFit, escortFitRows, fitChoice, fitRows, shopRows, shopSection, type FitRow } from '../sim/shop';
 import { fitEscort, partValue, sellPart, unfitEscort, type PartSource } from '../sim/outfit';
-import { escortStats } from '../sim/escort-stats';
+import { escortStats, vehicleResale } from '../sim/escort-stats';
 import { vehicleStats } from '../sim/vehicle';
 import { CITIES, CITY_BY_ID, START_CITY, type CityDef, type CityId } from '../config/cities';
 import { cityPos, nearestCopy } from '../sim/world';
 import type { HullId } from '../config/catalog';
-import { CARAVAN_CAP, ESCORT_RESALE, ESCORT_ROLE, escortDef, type EscortKind, type Tier } from '../config/escorts';
+import { CARAVAN_CAP, ESCORT_ROLE, escortDef, type EscortKind, type Tier } from '../config/escorts';
 import { cityPrice } from '../config/cities';
 import { buyEscort, caravanStats, repairEscorts, sellEscort } from '../sim/caravan';
 import type { Escort } from '../sim/caravan';
@@ -50,7 +50,9 @@ type GarageEntry =
   | { kind: 'store'; part: string }
   | { kind: 'take'; part: string }
   | { kind: 'park'; id: number }
-  | { kind: 'drive'; id: number };
+  | { kind: 'drive'; id: number }
+  | { kind: 'switch'; id: number }
+  | { kind: 'sell-rig'; id: number };
 
 /** What a row on the CARAVAN tab does. */
 type CaravanEntry =
@@ -241,7 +243,7 @@ export class CityScene extends Phaser.Scene {
     const st = escortStats(e);
     return [
       st.damage ? `DMG ${st.damage}` : '',
-      st.extraGun ? `+ ${st.extraGun.damage}` : '',
+      ...st.extraGuns.map((gun) => `GUN ${gun.damage}`),
       st.collectRadius ? `SWEEP ${st.collectRadius}` : '',
       st.cargoCap ? `HOLD ${st.cargoCap}` : '',
       st.tankCap ? `TANK ${st.tankCap}` : '',
@@ -302,7 +304,11 @@ export class CityScene extends Phaser.Scene {
     if (!g.owned) entries.push({ kind: 'buy' }, { kind: 'rent' });
     if (!hasGarage(s, this.city.id)) return entries;
     for (const part of g.parts) entries.push({ kind: 'take', part });
-    for (const v of g.vehicles) entries.push({ kind: 'drive', id: v.id });
+    for (const v of g.vehicles) {
+      if (v.rig) entries.push({ kind: 'switch', id: v.id });
+      entries.push({ kind: 'drive', id: v.id });
+      if (v.rig) entries.push({ kind: 'sell-rig', id: v.id });
+    }
     for (const part of s.vehicle.owned) entries.push({ kind: 'store', part });
     for (const e of s.caravan) entries.push({ kind: 'park', id: e.id });
     return entries;
@@ -330,12 +336,18 @@ export class CityScene extends Phaser.Scene {
         ? { text: `TAKE ${name}`, color: PAL.cyanPale, detail: holds }
         : { text: `STORE ${name}`, color: PAL.amber, detail: holds };
     }
-    const list = entry.kind === 'drive' ? g.vehicles : s.caravan;
+    const list = entry.kind === 'park' ? s.caravan : g.vehicles;
     const e = list.find((v) => v.id === entry.id);
     const name = e ? escortStats(e).name : '?';
     const hp = e ? `HP ${Math.ceil(e.hp)}/${escortStats(e).hp}` : '';
+    if (entry.kind === 'switch') {
+      return { text: `DRIVE ${name}  ${hp}`, color: PAL.pink, detail: 'MAKE IT YOUR RIG AGAIN; THE ONE YOU DRIVE IS PARKED HERE' };
+    }
+    if (entry.kind === 'sell-rig') {
+      return { text: `SELL ${name}`, right: `+${e ? vehicleResale(e) : 0} CR`, color: PAL.red, detail: 'SOLD WITH ITS PARTS. ENTER TWICE' };
+    }
     return entry.kind === 'drive'
-      ? { text: `TAKE OUT ${name}  ${hp}`, color: PAL.cyanPale, detail: holds }
+      ? { text: `${e?.rig ? 'ADD TO CARAVAN' : 'TAKE OUT'} ${name}  ${hp}`, color: PAL.cyanPale, detail: holds }
       : { text: `PARK ${name}  ${hp}`, color: PAL.amber, detail: 'ITS CREW MOVES TO THE RESERVE' };
   }
 
@@ -362,6 +374,18 @@ export class CityScene extends Phaser.Scene {
       case 'drive':
         this.apply(takeEscort(s, id, entry.id), 'ROLLING WITH YOU AGAIN. CHECK ITS CREW');
         break;
+      case 'switch':
+        this.apply(driveRig(s, id, entry.id), 'YOU TAKE THE WHEEL');
+        break;
+      case 'sell-rig':
+        if (this.pendingSell !== entry.id) {
+          this.pendingSell = entry.id;
+          this.say('PRESS ENTER AGAIN TO SELL THE RIG', false);
+          break;
+        }
+        this.pendingSell = null;
+        this.apply(sellStored(s, id, entry.id), 'RIG SOLD');
+        break;
     }
   }
 
@@ -385,10 +409,10 @@ export class CityScene extends Phaser.Scene {
       if (!e) return;
       if (this.pendingSell !== e.id) {
         this.pendingSell = e.id;
-        this.say(`PRESS ENTER AGAIN TO SELL ${escortDef(e.kind, e.tier).name}`, false);
+        this.say(`PRESS ENTER AGAIN TO SELL ${escortStats(e).name}`, false);
         return;
       }
-      this.apply(sellEscort(s, e.id), `SOLD ${escortDef(e.kind, e.tier).name}`);
+      this.apply(sellEscort(s, e.id), `SOLD ${escortStats(e).name}`);
     } else {
       const def = escortDef(entry.escort, entry.tier);
       this.apply(payInCity(s, (p) => buyEscort(p, entry.escort, entry.tier, this.city)), `${def.name} JOINS THE CARAVAN`);
@@ -409,6 +433,12 @@ export class CityScene extends Phaser.Scene {
           this.sellSpare(s, cursor, cursor - wares.length);
           break;
         }
+        if (row.kind === 'hull' && this.pendingPart !== cursor && funds(s) >= row.price) {
+          this.pendingPart = cursor;
+          this.say('ENTER AGAIN TO BUY. YOUR OLD RIG IS PARKED WITH ITS PARTS; THE NEW ONE HAS BASIC GEAR', false);
+          break;
+        }
+        this.pendingPart = null;
         const result = payInCity(s, (p) =>
           row.kind === 'hull'
             ? buyHull(p, row.id as HullId, this.city)
@@ -416,7 +446,9 @@ export class CityScene extends Phaser.Scene {
               ? buyPart(p, row.id, this.city)
               : buyRepairKit(p),
         );
-        if (this.apply(result, `BOUGHT ${row.name}`)) this.afterPurchase();
+        const parked = hasGarage(s, this.city.id) ? this.city.name : CITY_BY_ID[HOME_GARAGE].name;
+        const bought = row.kind === 'hull' ? `BOUGHT ${row.name}. OLD RIG PARKED AT ${parked}` : `BOUGHT ${row.name}`;
+        if (this.apply(result, bought)) this.afterPurchase();
         break;
       }
       case 'FIT': {
@@ -424,7 +456,7 @@ export class CityScene extends Phaser.Scene {
         if (!row) break; // the last rows only list parked vehicles
         if (row.target !== 'rig') {
           if (row.type === 'option') {
-            this.apply(fitEscort(s, this.city.id, row.target, row.slot, row.partId, row.from), 'FITTED');
+            this.apply(fitEscort(s, this.city.id, row.target, row.slot, row.partId, row.from, row.index), 'FITTED');
           } else {
             this.say('PICK A PART BELOW THE SLOT', false);
           }
@@ -486,7 +518,7 @@ export class CityScene extends Phaser.Scene {
     const result =
       row.target === 'rig'
         ? unfitPart(s, row.slot, row.index, this.city)
-        : unfitEscort(s, this.city.id, row.target, row.slot);
+        : unfitEscort(s, this.city.id, row.target, row.slot, row.index);
     this.apply(result, 'PART REMOVED');
   }
 
@@ -570,9 +602,9 @@ export class CityScene extends Phaser.Scene {
             const wrecked = e.hp <= 0;
             return {
               text: `${def.name}  ${wrecked ? 'WRECKED' : `HP ${Math.ceil(e.hp)}/${def.hp}`}`,
-              right: `SELL +${Math.floor(def.price * ESCORT_RESALE)}`,
+              right: `SELL +${vehicleResale(e)}`,
               color: wrecked ? PAL.red : PAL.cyanPale,
-              detail: `YOURS. ${ESCORT_ROLE[e.kind]}`,
+              detail: e.kind === 'rig' ? 'YOUR OLD RIG' : `YOURS. ${ESCORT_ROLE[e.kind]}`,
             };
           }
           const def = escortDef(entry.escort, entry.tier);

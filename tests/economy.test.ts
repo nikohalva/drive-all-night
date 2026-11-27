@@ -20,7 +20,7 @@ function ok(r: { ok: boolean; state?: GameState }): GameState {
 
 test('new game starts at dusk beside the city, facing the sunset, with no progress', () => {
   const s = newGame(7);
-  expect(s).toMatchObject({ version: 8, seed: 7, t: 0, credits: 0, debt: 0 });
+  expect(s).toMatchObject({ version: 9, seed: 7, t: 0, credits: 0, debt: 0 });
   expect(s.player.x).toBe(cityPosition(0).x + 40);
   expect(s.player.y).toBe(cityPosition(0).y);
   expect(s.player.heading).toBeCloseTo(-Math.PI / 2);
@@ -84,7 +84,8 @@ test('fit swaps parts and buying the juggernaut wins', () => {
   s = ok(buyHull(s, 'juggernaut'));
   expect(s.flags.won).toBe(true);
   expect(s.vehicle.fitted.weapon).toEqual(['weapon-1', null, null]);
-  expect(s.vehicle.fitted.engine).toEqual(['engine-2']);
+  expect(s.vehicle.fitted.engine).toEqual(['engine-1']);
+  expect(s.garages.citadel?.vehicles[0].rig?.fitted.engine).toEqual(['engine-2']); // left on the old rig
 });
 
 test('only the juggernaut wins, and you cannot buy a hull you have outgrown', () => {

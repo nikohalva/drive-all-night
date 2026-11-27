@@ -1,14 +1,20 @@
-/** An escort as it is now: its built-in gear plus whatever parts are fitted. */
-import { PARTS, type Part } from '../config/catalog';
+/** A caravan vehicle as it is now: its built-in gear plus whatever parts are fitted. */
+import { HULLS, PARTS, type Part } from '../config/catalog';
 import { escortDef, type EscortDef } from '../config/escorts';
-import type { Escort } from './caravan';
+import { PART_RESALE, PART_SCRAP } from '../config/outfit';
+import { ESCORT_RESALE } from '../config/escorts';
+import type { Escort, VehicleKind } from './caravan';
+import { vehicleStats, type WeaponStats } from './vehicle';
 
-export interface EscortStats extends EscortDef {
-  /** A fitted weapon, fired alongside the built-in guns. */
-  extraGun: { name: string; damage: number; accuracy: number } | null;
+export interface EscortStats extends Omit<EscortDef, 'kind'> {
+  kind: VehicleKind;
+  /** Fitted weapons, fired alongside any built-in gun. */
+  extraGuns: WeaponStats[];
 }
 
 const ENGINE_BASE = 80;
+/** What a city gives for a hull that cost nothing. */
+const SCOUT_HULL_VALUE = 250;
 
 /** What a part adds to an escort: half of what it gives your rig, full armour, or a whole gun. */
 export function escortBonus(p: Part): number {
@@ -29,8 +35,35 @@ export function escortBonus(p: Part): number {
   }
 }
 
+/** One of your old rigs running as a caravan vehicle: it keeps what it could do as the lead. */
+function rigStats(e: Escort): EscortStats {
+  const { hullId, fitted } = e.rig!;
+  const hull = HULLS[hullId];
+  const st = vehicleStats({ hullId, fitted, owned: [], hp: 0, fuel: 0, cargo: 0, repairKits: 0 });
+  return {
+    kind: 'rig',
+    tier: e.tier,
+    name: `OLD ${hull.name.toUpperCase()}`,
+    price: hull.price,
+    hp: st.maxHp,
+    armor: st.armor,
+    speed: st.topSpeed,
+    cargoCap: st.cargoCap,
+    tankCap: st.tankCap,
+    collectRadius: st.collectRadius,
+    damage: 0,
+    accuracy: 0,
+    longRange: false,
+    heal: 0,
+    sight: 0,
+    row: 'front',
+    extraGuns: st.weapons,
+  };
+}
+
 export function escortStats(e: Escort): EscortStats {
-  const out: EscortStats = { ...escortDef(e.kind, e.tier), extraGun: null };
+  if (e.kind === 'rig') return rigStats(e);
+  const out: EscortStats = { ...escortDef(e.kind, e.tier), extraGuns: [] };
   for (const id of Object.values(e.fitted ?? {})) {
     const p = id ? PARTS[id] : undefined;
     if (!p) continue;
@@ -39,10 +72,24 @@ export function escortStats(e: Escort): EscortStats {
     else if (p.slot === 'armor') {
       out.armor += bonus;
       out.hp += p.stats.hpBonus ?? 0;
-    } else if (p.slot === 'weapon') out.extraGun = { name: p.name, damage: bonus, accuracy: p.stats.accuracy ?? 0 };
+    } else if (p.slot === 'weapon') out.extraGuns.push({ name: p.name, damage: bonus, accuracy: p.stats.accuracy ?? 0 });
     else if (p.slot === 'collector') out.collectRadius += bonus;
     else if (p.slot === 'cargo') out.cargoCap += bonus;
     else out.tankCap += bonus;
   }
   return out;
+}
+
+export function partValue(partId: string): number {
+  const price = PARTS[partId]?.price ?? 0;
+  return price > 0 ? Math.floor(price * PART_RESALE) : PART_SCRAP;
+}
+
+/** What a city pays for a whole vehicle, with everything fitted to it. */
+export function vehicleResale(e: Escort): number {
+  const ids = e.kind === 'rig' ? Object.values(e.rig!.fitted).flat() : Object.values(e.fitted ?? {});
+  const parts = ids.reduce((n, id) => n + (id ? partValue(id) : 0), 0);
+  const price = escortStats(e).price;
+  const body = e.kind === 'rig' && price === 0 ? SCOUT_HULL_VALUE : Math.floor(price * ESCORT_RESALE);
+  return body + parts;
 }

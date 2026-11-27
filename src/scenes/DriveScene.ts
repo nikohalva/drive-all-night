@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CITY_DOCK_Y, CITY_H, CITY_W, rigLayout, rigSignature } from '../art/painters';
-import { ensureCityTexture, ensureEscortTextures, ensureMineTexture, ensureRigTextures } from '../art/textures';
+import { ensureCityTexture, ensureCaravanTextures, ensureMineTexture, ensureRigTextures } from '../art/textures';
 import { BALANCE } from '../config/balance';
 import { CITIES, CITY_BY_ID, type CityId } from '../config/cities';
 import {
@@ -356,7 +356,7 @@ export class DriveScene extends Phaser.Scene {
       const spot = this.escortSpots.get(e.id);
       if (!spot) continue;
       const towed = isWrecked(e) || !isCrewed(getState(), e.id);
-      const key = ensureEscortTextures(this, e.kind, e.tier)[towed ? 0 : phase];
+      const key = ensureCaravanTextures(this, e)[towed ? 0 : phase];
       let img = this.escortSprites.get(e.id);
       if (!img) {
         img = this.add.image(0, 0, key).setDepth(9);

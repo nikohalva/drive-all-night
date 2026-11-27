@@ -20,7 +20,7 @@ export interface Unit {
   uid: string;
   side: Side;
   name: string;
-  role: 'lead' | EscortKind | EnemyRole;
+  role: 'lead' | EscortKind | 'rig' | EnemyRole;
   row: Row;
   hp: number;
   maxHp: number;
@@ -101,7 +101,7 @@ export function startBattle(s: GameState, enemies: Pirate[], allies: Pirate[] = 
       speed: driverSpeed(s, e.id, def.speed),
       guns: [
         ...(def.damage > 0 ? [{ name: def.name, damage: def.damage, accuracy: def.accuracy }] : []),
-        ...(def.extraGun ? [def.extraGun] : []),
+        ...def.extraGuns,
       ].map((gun) => crewGun(s, e.id, gun)),
       longRange: def.longRange,
       heal: def.heal,

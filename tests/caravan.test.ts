@@ -53,7 +53,7 @@ test('caravan stats add capacity, move at the slowest speed and count working sp
   expect(st.cargoCap).toBe(60 + 120);
   expect(st.tankCap).toBe(40 + 60);
   expect(st.topSpeed).toBe(75);
-  expect(st.collectors).toEqual([{ id: 1, radius: 12 }]);
+  expect(st.collectors).toEqual([{ id: 2, radius: 12 }]); // id 1 went to the parked scout
   expect(st.sight).toBe(BASE_SIGHT + 400);
   expect(st.fleeBonus).toBeCloseTo(0.1);
   expect(st.escorts).toBe(4);

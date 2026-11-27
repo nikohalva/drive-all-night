@@ -1,7 +1,8 @@
 import { HULLS, PARTS, REPAIR_KIT, SLOT_TYPES, type HullId, type SlotType } from '../config/catalog';
 import { CITY_BY_ID, START_CITY, cityPrice, type CityDef } from '../config/cities';
 import { caravanStats } from './caravan';
-import { hasGarage, spareRoom, stash } from './garage';
+import { HOME_GARAGE } from '../config/holdings';
+import { hasGarage, parkVehicle, spareRoom, stash } from './garage';
 import { clampToCaps } from './outfit';
 import type { GameState } from './game-state';
 import { vehicleStats, type VehicleState } from './vehicle';
@@ -79,27 +80,42 @@ export function unfitPart(s: GameState, slot: SlotType, index: number, city: Cit
   return hasGarage(s, city.id) ? done(clampToCaps(stash(removed, city.id, previous))) : fail('slot');
 }
 
-/** Buy a bigger hull. Fitted parts carry over; buying the largest hull wins. */
+/** The gear a new hull leaves the yard with: one basic part of each kind. */
+function factoryFit(hullId: HullId): VehicleState['fitted'] {
+  const fitted = {} as VehicleState['fitted'];
+  for (const slot of SLOT_TYPES) {
+    fitted[slot] = Array.from({ length: HULLS[hullId].slots[slot] }, (_, i) => (i === 0 ? `${slot}-1` : null));
+  }
+  return fitted;
+}
+
+/**
+ * Buy a bigger hull. The old rig is parked with its parts, in this city's garage or else towed
+ * home. Buying the largest hull wins.
+ */
 export function buyHull(s: GameState, hullId: HullId, city: CityDef = HOME): TxResult {
   const hull = HULLS[hullId];
   if (hull.tier <= HULLS[s.vehicle.hullId].tier) return fail('nothing');
   const price = cityPrice(hull.price, city);
   if (s.credits < price) return fail('credits');
 
-  const fitted = { ...s.vehicle.fitted };
-  for (const slot of SLOT_TYPES) {
-    const parts = [...fitted[slot]];
-    while (parts.length < hull.slots[slot]) parts.push(null);
-    fitted[slot] = parts;
-  }
-  const next: VehicleState = { ...s.vehicle, hullId, fitted };
-  const stats = vehicleStats(next);
-  return done({
-    ...s,
-    vehicle: { ...next, hp: stats.maxHp, fuel: Math.min(next.fuel, caravanStats({ ...s, vehicle: next }).tankCap) },
+  const garage = hasGarage(s, city.id) ? city.id : HOME_GARAGE;
+  const old = {
+    id: s.nextEscortId,
+    kind: 'rig' as const,
+    tier: HULLS[s.vehicle.hullId].tier,
+    hp: s.vehicle.hp,
+    rig: { hullId: s.vehicle.hullId, fitted: s.vehicle.fitted },
+  };
+  const next: VehicleState = { ...s.vehicle, hullId, fitted: factoryFit(hullId) };
+  const bought: GameState = {
+    ...parkVehicle(s, garage, old),
+    nextEscortId: s.nextEscortId + 1,
+    vehicle: { ...next, hp: vehicleStats(next).maxHp },
     credits: s.credits - price,
     flags: { ...s.flags, won: s.flags.won || hullId === 'juggernaut' },
-  });
+  };
+  return done(clampToCaps(bought));
 }
 
 export function buyRepairKit(s: GameState): TxResult {

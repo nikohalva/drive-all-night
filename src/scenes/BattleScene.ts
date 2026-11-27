@@ -2,8 +2,7 @@ import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
 import { rigLayout } from '../art/painters';
-import { ensureEnemyTexture, ensureEscortTextures, ensureRigTextures } from '../art/textures';
-import type { EscortKind } from '../config/escorts';
+import { ensureCaravanTextures, ensureEnemyTexture, ensureRigTextures } from '../art/textures';
 import { VIEW } from '../config/view';
 import { getState, setState } from '../game/session';
 import {
@@ -117,7 +116,7 @@ export class BattleScene extends Phaser.Scene {
         scale = s.vehicle.hullId === 'scout' ? 2 : 1;
       } else if (u.side === 'player' && !u.ally) {
         const e = s.caravan.find((x) => x.id === u.escortId);
-        key = ensureEscortTextures(this, u.role as EscortKind, e?.tier ?? 1)[0];
+        key = ensureCaravanTextures(this, e!)[0];
       } else {
         key = ensureEnemyTexture(this, u.role, u.level ?? 1);
       }

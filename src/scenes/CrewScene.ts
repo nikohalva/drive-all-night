@@ -3,7 +3,7 @@ import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
 import { PORTRAIT, portrait } from '../art/portraits';
 import { PAY_PERIOD, ROLE_EFFECT, ROLE_NAME, SKILL_NAME, TRAITS } from '../config/crew';
-import { escortDef } from '../config/escorts';
+import { escortStats } from '../sim/escort-stats';
 import { VIEW } from '../config/view';
 import { getState, setState } from '../game/session';
 import { assignCrew, crewAt, dismissCrew, isFit, reassignCrew, seatCandidate, seatsAt, wageOf, wagesDue, type CrewMember, type Post } from '../sim/crew';
@@ -75,7 +75,7 @@ export class CrewScene extends Phaser.Scene {
       if (post !== null && people.length < seatsAt(s, post)) rows.push({ empty: post });
     };
     group('lead', 'YOUR RIG');
-    for (const e of s.caravan) group(e.id, escortDef(e.kind, e.tier).name);
+    for (const e of s.caravan) group(e.id, escortStats(e).name);
     group(null, 'RESERVE');
     return rows;
   }

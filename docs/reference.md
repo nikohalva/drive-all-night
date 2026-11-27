@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.9.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.10.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Controls
 
@@ -15,7 +15,15 @@ Components, upgrades and rules as of **0.9.0-alpha**. The numbers live in `src/c
 
 ## Rig hulls
 
-Hulls are bought in any city. Buying the Juggernaut wins.
+Hulls are bought in any city (press Enter twice). Buying the Juggernaut wins.
+
+### Your old rig
+
+When you buy a bigger hull, the new one arrives with basic gear. The old rig is parked with all its parts in that city's garage, or towed to Dusk Citadel if you have no garage there. Spares, cargo and crew stay with you. On the **GARAGE** tab you can:
+
+- **Drive** it again; the rig you were driving is parked instead. Your caravan must fit its limit.
+- **Add it to the caravan.** It needs crew, uses the hull's seats and fights with its own guns. Its parts can be moved on the **FIT** tab, though it keeps at least one engine and tank (swap in a basic one to free a good one).
+- **Sell** it with its parts: half the hull price (250 for a Scout) plus the parts.
 
 | Hull | Price | Hull points | Collector slots | Weapon slots | Cargo / armor slots | Escorts | Crew seats |
 |---|---|---|---|---|---|---|---|
