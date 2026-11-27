@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.4.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.4.1-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Controls
 
@@ -136,7 +136,7 @@ Cities that trail farther behind the sunset pay more for Particle X. The game is
 
 ## Bank
 
-Deposit and withdraw in any city (all or 500 at a time). Mines are not part of the bank. Losing a fight takes your cargo and every credit you carry; banked credits are safe. Purchases use carried credits only.
+Deposit and withdraw in any city (all or 500 at a time). Mines are not part of the bank. Losing a fight takes your cargo and every credit you carry; banked credits are safe. City purchases and services use carried credits first, then the bank. Mines take carried credits only.
 
 ## Garages
 
