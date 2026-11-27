@@ -8,7 +8,7 @@ import type { GameState } from './game-state';
 
 export const SAVE_KEY = 'drive-all-night/save-v1';
 /** The save format this build writes; older formats are upgraded on load. */
-export const CURRENT_SAVE_VERSION = 6;
+export const CURRENT_SAVE_VERSION = 7;
 
 export interface KV {
   getItem(k: string): string | null;
@@ -57,6 +57,9 @@ function looksLikeGameState(x: unknown): x is GameState {
     if (!Array.isArray(g.parts) || !g.parts.every((id) => typeof id === 'string')) return false;
     if (!Array.isArray(g.vehicles) || !g.vehicles.every(isEscort)) return false;
   }
+  const w = x.wrecks;
+  const isIds = (list: unknown): boolean => Array.isArray(list) && list.every((id) => typeof id === 'string');
+  if (!isObj(w) || !isIds(w.found) || !isIds(w.searched)) return false;
   if (!isNum(x.seed) || !isNum(x.t) || !isNum(x.credits) || !isNum(x.debt)) return false;
 
   const p = x.player;
@@ -96,6 +99,7 @@ function upgrade(x: unknown): unknown {
     const home = { owned: true, rentUntil: 0, parts: [], vehicles: [] };
     v = { ...v, version: 6, bank: 0, garages: { [HOME_GARAGE]: home } };
   }
+  if (v.version === 6) v = { ...v, version: 7, wrecks: { found: [], searched: [] } };
   return v;
 }
 

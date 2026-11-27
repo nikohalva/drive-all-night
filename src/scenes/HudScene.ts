@@ -41,6 +41,7 @@ interface HudData {
   blink: boolean;
   nearMine: string | null;
   mineSealed: boolean;
+  nearWreck: boolean;
   toast: string | null;
 }
 
@@ -106,6 +107,7 @@ export class HudScene extends Phaser.Scene {
       blink: Math.floor(time / 300) % 2 === 0,
       nearMine: ui.nearMine,
       mineSealed: ui.mineSealed,
+      nearWreck: ui.nearWreck,
       toast: ui.toast && time < ui.toastUntil ? ui.toast : null,
     };
   }
@@ -193,6 +195,7 @@ export class HudScene extends Phaser.Scene {
     if (d.nearDock) prompts.push(`E: DOCK AT ${d.dockName ?? 'CITY'}`);
     if (d.nearMine) prompts.push(`E: ENTER THE MINE OF ${d.nearMine}`);
     if (d.mineSealed) prompts.push('THE MINE IS SEALED UNTIL NIGHT');
+    if (d.nearWreck) prompts.push('E: SEARCH THE WRECK');
     if (d.fuelHint) prompts.push('F: FUEL FROM CARGO');
     prompts.forEach((p, i) => this.centered(ctx, p, H - 44 - i * 9, d.broken && i === 0 ? PAL.red : PAL.amber));
   }

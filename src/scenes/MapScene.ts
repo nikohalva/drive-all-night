@@ -5,6 +5,7 @@ import { NIGHT_LEN } from '../config/balance';
 import { CITIES, CITY_BY_ID } from '../config/cities';
 import { VIEW } from '../config/view';
 import { getState } from '../game/session';
+import { allWrecks } from '../sim/desert';
 import { STANDING_COLOR, mineSites, relation, statusOf } from '../sim/barons';
 import { planetTimeLabel } from '../sim/clock';
 import { mapWindow, placeLabel, toMap, type MapArea, type MapWindow, type MapZoom } from '../sim/map';
@@ -104,6 +105,16 @@ export class MapScene extends Phaser.Scene {
       drawText(ctx, m.name, Math.round(p.x) + 6, Math.round(p.y) - 2, m.color);
     }
 
+    // wrecks you have spotted and not yet searched: small amber crosses, no names
+    ctx.fillStyle = PAL.amber;
+    for (const w of allWrecks(s.seed)) {
+      if (!s.wrecks.found.includes(w.id)) continue;
+      const p = toMap(w.x, nearestCopy(w.y, s.player.y), win);
+      if (p.y < AREA.y + 2 || p.y > AREA.y + AREA.h - 2) continue;
+      ctx.fillRect(Math.round(p.x) - 1, Math.round(p.y), 3, 1);
+      ctx.fillRect(Math.round(p.x), Math.round(p.y) - 1, 1, 3);
+    }
+
     // you
     const me = toMap(s.player.x, s.player.y, win);
     ctx.fillStyle = PAL.cyan;
@@ -184,6 +195,7 @@ export class MapScene extends Phaser.Scene {
       drawText(ctx, st, x + 8 + i * 58, legendY - 12, STANDING_COLOR[st]),
     );
     drawText(ctx, 'IMPASSABLE', x + 100, legendY, '#b07ad0');
+    drawText(ctx, '+ WRECK', x + 150, legendY, PAL.amber);
     drawText(ctx, `${CITIES.length} CITIES ROLL THROUGH THE NIGHT`, x, legendY + 14, '#6a5a8a');
   }
 }

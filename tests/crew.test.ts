@@ -204,7 +204,7 @@ test('crew survive a save, and an older save gets a hand for every escort', () =
   delete old.nextCrewId;
   delete old.hired;
   const loaded = deserialize(JSON.stringify(old))!;
-  expect(loaded.version).toBe(6);
+  expect(loaded.version).toBe(7);
   expect(loaded.crew).toHaveLength(1);
   expect(isCrewed(loaded, 1)).toBe(true);
 });
