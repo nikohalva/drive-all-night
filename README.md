@@ -13,6 +13,10 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.4.2-alpha (2026-11-27)
+
+- The shop is split into sections: rigs, engines, tanks, collectors, cargo holds, armor, weapons and supplies
+
 ### 0.4.1-alpha (2026-11-27)
 
 - In cities you can pay with banked credits: what you carry is used first, then the bank. Mines take only carried credits.

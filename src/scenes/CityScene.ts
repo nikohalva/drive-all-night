@@ -25,7 +25,7 @@ import {
 import type { GameState } from '../sim/game-state';
 import { hash2 } from '../sim/rng';
 import { saveGame } from '../sim/save';
-import { compatibleOwned, cycleFit, garageRows, shopRows } from '../sim/shop';
+import { compatibleOwned, cycleFit, garageRows, shopRows, shopSection } from '../sim/shop';
 import { vehicleStats } from '../sim/vehicle';
 import { CITY_BY_ID, START_CITY, type CityDef, type CityId } from '../config/cities';
 import { cityPos, nearestCopy } from '../sim/world';
@@ -78,6 +78,8 @@ interface Row {
   color: string;
   dim?: boolean;
   detail?: string;
+  /** Heading drawn above the first row of each group. */
+  section?: string;
 }
 
 /** The city menu: sell, shop, garage, services, save. The world clock is frozen while it is open. */
@@ -413,6 +415,7 @@ export class CityScene extends Phaser.Scene {
       }
       case 'SHOP':
         return shopRows(asOnePurse(s), this.city).map((r) => ({
+          section: shopSection(r),
           text: r.name,
           right: `${r.price} CR`,
           color: r.kind === 'hull' ? PAL.pink : r.kind === 'kit' ? PAL.cyanPale : PAL.amber,
@@ -634,10 +637,24 @@ export class CityScene extends Phaser.Scene {
     this.panel(ctx, LIST_X, LIST_Y - 2, LIST_W, VISIBLE_ROWS * ROW_H + 6);
     const rows = this.rows();
     const cursor = Math.min(this.cursors[this.tab], Math.max(0, rows.length - 1));
-    const start = Math.max(0, Math.min(cursor - 7, rows.length - VISIBLE_ROWS));
-    rows.slice(start, start + VISIBLE_ROWS).forEach((row, i) => {
+    // headings take a line of their own but cannot be picked
+    const listed: ({ heading: string } | { row: Row; index: number })[] = [];
+    rows.forEach((row, index) => {
+      if (row.section && row.section !== rows[index - 1]?.section) listed.push({ heading: row.section });
+      listed.push({ row, index });
+    });
+    const at = listed.findIndex((l) => 'index' in l && l.index === cursor);
+    const start = Math.max(0, Math.min(at - 7, listed.length - VISIBLE_ROWS));
+    listed.slice(start, start + VISIBLE_ROWS).forEach((line, i) => {
       const y = LIST_Y + 2 + i * ROW_H;
-      const selected = start + i === cursor;
+      if ('heading' in line) {
+        this.text(ctx, line.heading, LIST_X + 6, y, PAL.pink);
+        ctx.fillStyle = 'rgba(255,43,214,0.35)';
+        ctx.fillRect(LIST_X + 10 + textWidth(line.heading), y + 2, LIST_W - 18 - textWidth(line.heading), 1);
+        return;
+      }
+      const { row } = line;
+      const selected = line.index === cursor;
       if (selected) {
         ctx.fillStyle = 'rgba(255,43,214,0.22)';
         ctx.fillRect(LIST_X + 2, y - 2, LIST_W - 4, ROW_H);

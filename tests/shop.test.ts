@@ -1,6 +1,6 @@
 import { buyHull, buyPart } from '../src/sim/economy';
 import { newGame, type GameState } from '../src/sim/game-state';
-import { compatibleOwned, cycleFit, garageRows, shopRows } from '../src/sim/shop';
+import { compatibleOwned, cycleFit, garageRows, shopRows, shopSection } from '../src/sim/shop';
 
 function ok(r: { ok: boolean; state?: GameState }): GameState {
   if (!r.ok || !r.state) throw new Error('expected an ok transaction');
@@ -17,6 +17,13 @@ test('a new game shops for two bigger hulls, twelve upgrade parts and repair kit
   ]);
   expect(rows.slice(0, 2).map((r) => r.id)).toEqual(['hauler', 'juggernaut']);
   expect(rows.every((r) => !r.affordable)).toBe(true);
+});
+
+test('every item belongs to a section, and each section is one unbroken block', () => {
+  const sections = shopRows(newGame(1)).map(shopSection);
+  expect(sections.filter((name, i) => name !== sections[i - 1])).toEqual([
+    'RIGS', 'ENGINES', 'TANKS', 'COLLECTORS', 'CARGO HOLDS', 'ARMOR', 'WEAPONS', 'SUPPLIES',
+  ]);
 });
 
 test('affordability follows credits', () => {

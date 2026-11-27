@@ -31,6 +31,22 @@ const SLOT_NAME: Record<SlotType, string> = {
   weapon: 'WEAPON',
 };
 
+const SECTION: Record<SlotType, string> = {
+  engine: 'ENGINES',
+  tank: 'TANKS',
+  collector: 'COLLECTORS',
+  cargo: 'CARGO HOLDS',
+  armor: 'ARMOR',
+  weapon: 'WEAPONS',
+};
+
+/** The shop heading an item is listed under. */
+export function shopSection(row: ShopRow): string {
+  if (row.kind === 'hull') return 'RIGS';
+  if (row.kind === 'kit') return 'SUPPLIES';
+  return SECTION[PARTS[row.id].slot];
+}
+
 const signed = (n: number): string => (n >= 0 ? `+${n}` : `${n}`);
 
 function partSummary(p: Part): string {
