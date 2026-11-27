@@ -2,11 +2,11 @@ import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
 import { PORTRAIT, portrait } from '../art/portraits';
-import { ROLE_EFFECT, ROLE_NAME, SKILL_NAME, TRAITS } from '../config/crew';
+import { PAY_PERIOD, ROLE_EFFECT, ROLE_NAME, SKILL_NAME, TRAITS } from '../config/crew';
 import { escortDef } from '../config/escorts';
 import { VIEW } from '../config/view';
 import { getState, setState } from '../game/session';
-import { assignCrew, crewAt, dismissCrew, isFit, reassignCrew, seatCandidate, seatsAt, type CrewMember, type Post } from '../sim/crew';
+import { assignCrew, crewAt, dismissCrew, isFit, reassignCrew, seatCandidate, seatsAt, wageOf, wagesDue, type CrewMember, type Post } from '../sim/crew';
 import type { GameState } from '../sim/game-state';
 
 const W = VIEW.W;
@@ -196,6 +196,7 @@ export class CrewScene extends Phaser.Scene {
     };
 
     text('CREW', 8, 8, PAL.pink, 2);
+    if (wagesDue(s) > 0) text(`WAGES DUE ${wagesDue(s)} CR - PAY IN A CITY`, 8, H - 22, PAL.amber);
     text('UP/DOWN: PICK  ENTER: MOVE/FILL  R: OFF VEHICLE  X: FIRE  C: CLOSE', 60, 11, '#8a7aaa');
 
     const rows = this.rows(s);
@@ -248,6 +249,9 @@ export class CrewScene extends Phaser.Scene {
       line(member.name, PAL.white);
       line(`${SKILL_NAME[member.skill]} ${ROLE_NAME[member.role]}`, PAL.cyanPale);
       line(healthWord(member), isFit(member) ? PAL.white : PAL.red);
+      line(`WAGE ${wageOf(member)} PER ${PAY_PERIOD / 60} MIN`, '#b8a8d8');
+      if (member.missed > 0) line('UNPAID: NO BONUS', PAL.red);
+      else if (member.owed >= 1) line(`OWED ${Math.floor(member.owed)} CR`, PAL.amber);
       line(TRAITS[member.trait].name, PAL.amber);
       for (const part of wrap(TRAITS[member.trait].line, W - SIDE_X - 6)) line(part, '#b8a8d8');
       y += 4;
