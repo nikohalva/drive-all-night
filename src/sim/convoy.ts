@@ -9,6 +9,22 @@ const MIN_STEP = 1.5;
 /** Path kept beyond the last follower, in px. */
 const SLACK = 60;
 
+/** Clear road kept between one vehicle's tail and the next one's nose, in px. */
+export const CONVOY_GAP = 4;
+
+/**
+ * How far behind the lead each follower's middle rides: `leadTail` is how far the lead reaches
+ * back, `lengths` the followers' lengths in order.
+ */
+export function convoyDistances(leadTail: number, lengths: readonly number[]): number[] {
+  let tail = leadTail;
+  return lengths.map((length) => {
+    const middle = tail + CONVOY_GAP + length / 2;
+    tail = middle + length / 2;
+    return middle;
+  });
+}
+
 /**
  * Remembers the lead's path so escorts can drive along it in a column. The lead's path is
  * always passable, so followers never need their own collision checks.
@@ -31,14 +47,14 @@ export class Convoy {
     this.pts.unshift({ x, y });
   }
 
-  /** Positions for `n` followers spaced `spacing` px apart along the path, nearest first. */
-  followers(n: number, spacing: number): Follower[] {
+  /** Positions at these distances back along the path; the distances must increase. */
+  followers(distances: readonly number[]): Follower[] {
     const out: Follower[] = [];
     if (this.pts.length === 0) return out;
     let walked = 0;
     let seg = 0;
-    for (let i = 1; i <= n; i++) {
-      const want = i * spacing;
+    for (let i = 1; i <= distances.length; i++) {
+      const want = distances[i - 1];
       while (seg < this.pts.length - 1) {
         const a = this.pts[seg];
         const b = this.pts[seg + 1];
@@ -59,7 +75,7 @@ export class Convoy {
         out.push({ x: last.x, y: last.y, heading });
       }
     }
-    this.trim(n * spacing + SLACK);
+    this.trim((distances[distances.length - 1] ?? 0) + SLACK);
     return out;
   }
 
