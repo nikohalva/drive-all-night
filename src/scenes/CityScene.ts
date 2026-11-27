@@ -4,7 +4,7 @@ import { PORTRAIT, portrait } from '../art/portraits';
 import { ROLE_EFFECT, ROLE_NAME, SKILL_NAME, TRAITS } from '../config/crew';
 import { BANK_STEP, GARAGE_PRICE, GARAGE_RENT, GARAGE_VEHICLES, RENT_SECONDS, SPARE_SLOTS } from '../config/holdings';
 import { PARTS } from '../config/catalog';
-import { deposit, withdraw } from '../sim/bank';
+import { asOnePurse, deposit, funds, payInCity, withdraw } from '../sim/bank';
 import { buyGarage, garageAt, hasGarage, parkEscort, rentGarage, storePart, takeEscort, takePart } from '../sim/garage';
 import { hireCrew, recruitPool, treatCrew, treatmentCost } from '../sim/crew';
 import { PAL } from '../art/palette';
@@ -211,7 +211,7 @@ export class CityScene extends Phaser.Scene {
     const g = garageAt(s, this.city.id);
     const holds = `STORED HERE: ${g.parts.length} PARTS, ${g.vehicles.length}/${GARAGE_VEHICLES} VEHICLES. SPARES ABOARD ${s.vehicle.owned.length}/${SPARE_SLOTS[s.vehicle.hullId]}`;
     if (entry.kind === 'buy') {
-      return { text: 'BUY THIS GARAGE', right: `${GARAGE_PRICE} CR`, color: PAL.pink, dim: s.credits < GARAGE_PRICE, detail: holds };
+      return { text: 'BUY THIS GARAGE', right: `${GARAGE_PRICE} CR`, color: PAL.pink, dim: funds(s) < GARAGE_PRICE, detail: holds };
     }
     if (entry.kind === 'rent') {
       const left = Math.ceil((g.rentUntil - s.t) / 60);
@@ -219,7 +219,7 @@ export class CityScene extends Phaser.Scene {
         text: left > 0 ? `EXTEND THE RENT (${left} MIN LEFT)` : 'RENT THIS GARAGE',
         right: `${GARAGE_RENT} CR`,
         color: PAL.pink,
-        dim: s.credits < GARAGE_RENT,
+        dim: funds(s) < GARAGE_RENT,
         detail: `${RENT_SECONDS / 60} MINUTES A PAYMENT. ${holds}`,
       };
     }
@@ -244,10 +244,10 @@ export class CityScene extends Phaser.Scene {
     const id = this.city.id;
     switch (entry.kind) {
       case 'buy':
-        this.apply(buyGarage(s, id), 'THE GARAGE IS YOURS');
+        this.apply(payInCity(s, (p) => buyGarage(p, id)), 'THE GARAGE IS YOURS');
         break;
       case 'rent':
-        this.apply(rentGarage(s, id), 'RENT PAID');
+        this.apply(payInCity(s, (p) => rentGarage(p, id)), 'RENT PAID');
         break;
       case 'store':
         this.apply(storePart(s, id, entry.part), 'STORED');
@@ -278,7 +278,7 @@ export class CityScene extends Phaser.Scene {
     const entry = this.caravanEntries(s)[cursor];
     if (!entry) return;
     if (entry.kind === 'repair') {
-      this.apply(repairEscorts(s, this.city), 'ESCORTS REPAIRED');
+      this.apply(payInCity(s, (p) => repairEscorts(p, this.city)), 'ESCORTS REPAIRED');
     } else if (entry.kind === 'own') {
       const e = s.caravan.find((x) => x.id === entry.id);
       if (!e) return;
@@ -290,7 +290,7 @@ export class CityScene extends Phaser.Scene {
       this.apply(sellEscort(s, e.id), `SOLD ${escortDef(e.kind, e.tier).name}`);
     } else {
       const def = escortDef(entry.escort, entry.tier);
-      this.apply(buyEscort(s, entry.escort, entry.tier, this.city), `${def.name} JOINS THE CARAVAN`);
+      this.apply(payInCity(s, (p) => buyEscort(p, entry.escort, entry.tier, this.city)), `${def.name} JOINS THE CARAVAN`);
     }
     this.pendingSell = null;
   }
@@ -309,12 +309,13 @@ export class CityScene extends Phaser.Scene {
       case 'SHOP': {
         const row = shopRows(s, this.city)[cursor];
         if (!row) break;
-        const result =
+        const result = payInCity(s, (p) =>
           row.kind === 'hull'
-            ? buyHull(s, row.id as HullId, this.city)
+            ? buyHull(p, row.id as HullId, this.city)
             : row.kind === 'part'
-              ? buyPart(s, row.id, this.city)
-              : buyRepairKit(s);
+              ? buyPart(p, row.id, this.city)
+              : buyRepairKit(p),
+        );
         if (this.apply(result, `BOUGHT ${row.name}`)) this.afterPurchase();
         break;
       }
@@ -348,13 +349,13 @@ export class CityScene extends Phaser.Scene {
           return;
         }
         const recruit = recruitPool(s, this.city)[cursor - 1];
-        if (recruit) this.apply(hireCrew(s, this.city, recruit.key), `${recruit.name} SIGNS ON`);
+        if (recruit) this.apply(payInCity(s, (p) => hireCrew(p, this.city, recruit.key)), `${recruit.name} SIGNS ON`);
         break;
       }
       case 'SERVICES':
-        if (cursor === 2) this.apply(treatCrew(s), 'CREW PATCHED UP');
-        else if (cursor === 0) this.apply(repairFull(s, this.city), 'HULL REPAIRED');
-        else this.apply(refuelFull(s, this.city), 'TANK REFUELLED');
+        if (cursor === 2) this.apply(payInCity(s, treatCrew), 'CREW PATCHED UP');
+        else if (cursor === 0) this.apply(payInCity(s, (p) => repairFull(p, this.city)), 'HULL REPAIRED');
+        else this.apply(payInCity(s, (p) => refuelFull(p, this.city)), 'TANK REFUELLED');
         break;
       case 'SAVE':
         if (saveGame(getState())) this.say('GAME SAVED');
@@ -411,7 +412,7 @@ export class CityScene extends Phaser.Scene {
         ];
       }
       case 'SHOP':
-        return shopRows(s, this.city).map((r) => ({
+        return shopRows(asOnePurse(s), this.city).map((r) => ({
           text: r.name,
           right: `${r.price} CR`,
           color: r.kind === 'hull' ? PAL.pink : r.kind === 'kit' ? PAL.cyanPale : PAL.amber,
@@ -477,7 +478,7 @@ export class CityScene extends Phaser.Scene {
             text: `BUY ${def.name}`,
             right: `${price} CR`,
             color: PAL.amber,
-            dim: s.credits < price || s.caravan.length >= cap,
+            dim: funds(s) < price || s.caravan.length >= cap,
             detail: `${ESCORT_ROLE[entry.escort]}. ${bits.join(' ')}`,
           };
         });
@@ -494,7 +495,7 @@ export class CityScene extends Phaser.Scene {
             text: `HIRE ${r.name}  ${SKILL_NAME[r.skill]} ${ROLE_NAME[r.role]}`,
             right: `${r.price} CR`,
             color: PAL.amber,
-            dim: s.credits < r.price,
+            dim: funds(s) < r.price,
             detail: `${ROLE_EFFECT[r.role]}. ${TRAITS[r.trait].name}`,
           })),
         ];

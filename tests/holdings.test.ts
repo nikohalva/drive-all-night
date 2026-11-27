@@ -1,9 +1,10 @@
 import { CITY_BY_ID } from '../src/config/cities';
 import { BANK_STEP, GARAGE_PRICE, GARAGE_RENT, GARAGE_VEHICLES, RENT_SECONDS, SALVAGE, SPARE_SLOTS } from '../src/config/holdings';
-import { deposit, withdraw } from '../src/sim/bank';
+import { deposit, funds, payInCity, withdraw } from '../src/sim/bank';
 import { applyBattleResult, startBattle, type BattleState } from '../src/sim/battle';
 import { buyEscort } from '../src/sim/caravan';
-import { buyPart, unfitPart } from '../src/sim/economy';
+import { buyPart, repairFull, unfitPart } from '../src/sim/economy';
+import { mineSites, tributeCredits } from '../src/sim/barons';
 import { buyGarage, hasGarage, parkEscort, rentGarage, storePart, takeEscort, takePart } from '../src/sim/garage';
 import { newGame, type GameState } from '../src/sim/game-state';
 import { makePirateGroup } from '../src/sim/pirates';
@@ -26,6 +27,24 @@ test('credits move in and out of the bank, never more than there is', () => {
   expect(ok(withdraw(banked, 9999))).toMatchObject({ credits: 800, bank: 0 });
   expect(deposit(newGame(1), 100)).toEqual({ ok: false, reason: 'nothing' });
   expect(withdraw(s, 100)).toEqual({ ok: false, reason: 'nothing' });
+});
+
+test('in a city you pay with what you carry first, then from the bank', () => {
+  const s = { ...newGame(1), credits: 200, bank: 1000 };
+  expect(funds(s)).toBe(1200);
+  const bought = ok(payInCity(s, (x) => buyPart(x, 'engine-2'))); // 600
+  expect(bought).toMatchObject({ credits: 0, bank: 600 });
+  expect(bought.vehicle.owned).toEqual(['engine-2']);
+  expect(ok(payInCity({ ...s, credits: 700 }, (x) => buyPart(x, 'engine-2')))).toMatchObject({ credits: 100, bank: 1000 });
+  expect(payInCity({ ...s, bank: 100 }, (x) => buyPart(x, 'engine-2'))).toEqual({ ok: false, reason: 'credits' });
+  // a partial service uses everything you have
+  const wreck = { ...s, credits: 10, bank: 10, vehicle: { ...s.vehicle, hp: 1 } };
+  expect(ok(payInCity(wreck, (x) => repairFull(x)))).toMatchObject({ credits: 0, bank: 0 });
+});
+
+test('mines are outside the bank: only the credits you carry count', () => {
+  const s = { ...newGame(1), credits: 0, bank: 5000 };
+  expect(tributeCredits(s, mineSites(1)[0].id)).toEqual({ ok: false, reason: 'credits' });
 });
 
 test('losing a fight costs the cargo and the credits you carry, not what is banked', () => {
