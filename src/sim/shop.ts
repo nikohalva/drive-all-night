@@ -1,5 +1,7 @@
 import { HULLS, PARTS, REPAIR_KIT, SLOT_TYPES, type Part, type SlotType } from '../config/catalog';
-import { CITY_BY_ID, START_CITY, type CityDef } from '../config/cities';
+import { CITY_BY_ID, START_CITY, type CityDef, type CityId } from '../config/cities';
+import { SPARE_SLOTS } from '../config/holdings';
+import { garageAt, hasGarage, stash } from './garage';
 import { cityPrice, fitPart, type TxResult } from './economy';
 import type { GameState } from './game-state';
 
@@ -159,4 +161,77 @@ export function cycleFit(s: GameState, slot: SlotType, index: number): TxResult 
   const next = compatibleOwned(s, slot)[0];
   if (!next) return { ok: false, reason: 'nothing' };
   return fitPart(s, next, slot, index);
+}
+
+/** A line of the FIT page: a slot of your rig, or a spare part that could go into it. */
+export type FitRow =
+  | { type: 'slot'; slot: SlotType; index: number; partId: string | null; label: string; summary: string }
+  | {
+      type: 'option';
+      slot: SlotType;
+      index: number;
+      partId: string;
+      from: 'aboard' | 'garage';
+      label: string;
+      summary: string;
+      delta: string;
+    };
+
+/** Every slot followed by the parts you could put in it, from aboard or this city's garage. */
+export function fitRows(s: GameState, city: CityId): FitRow[] {
+  const stored = hasGarage(s, city) ? garageAt(s, city).parts : [];
+  const rows: FitRow[] = [];
+  for (const slot of garageRows(s)) {
+    const current = slot.partId ? PARTS[slot.partId] : undefined;
+    rows.push({ type: 'slot', ...slot, summary: current ? partSummary(current) : '' });
+    const sources = [
+      ['aboard', s.vehicle.owned],
+      ['garage', stored],
+    ] as const;
+    for (const [from, parts] of sources) {
+      for (const id of [...new Set(parts)].sort()) {
+        const part = PARTS[id];
+        if (!part || part.slot !== slot.slot) continue;
+        const { key, label } = MAIN_STAT[slot.slot];
+        rows.push({
+          type: 'option',
+          slot: slot.slot,
+          index: slot.index,
+          partId: id,
+          from,
+          label: `FIT ${part.name.toUpperCase()}`,
+          summary: partSummary(part),
+          delta: `${label} ${signed((part.stats[key] ?? 0) - (current?.stats[key] ?? 0))}`,
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+/** Put a chosen spare into a slot. What comes out goes to your spares, or the garage if they are full. */
+export function fitChoice(
+  s: GameState,
+  city: CityId,
+  slot: SlotType,
+  index: number,
+  partId: string,
+  from: 'aboard' | 'garage',
+): TxResult {
+  if (from === 'aboard') return fitPart(s, partId, slot, index);
+  const { parts } = garageAt(s, city);
+  const at = parts.indexOf(partId);
+  if (at < 0 || !hasGarage(s, city)) return { ok: false, reason: 'not-owned' };
+  const picked: GameState = {
+    ...s,
+    vehicle: { ...s.vehicle, owned: [...s.vehicle.owned, partId] },
+    garages: { ...s.garages, [city]: { ...garageAt(s, city), parts: parts.filter((_, i) => i !== at) } },
+  };
+  const r = fitPart(picked, partId, slot, index);
+  // a part came out of the garage, so the spares may be as they were, or one under the limit
+  const limit = Math.max(SPARE_SLOTS[s.vehicle.hullId], s.vehicle.owned.length);
+  if (!r.ok || r.state.vehicle.owned.length <= limit) return r;
+  const owned = r.state.vehicle.owned;
+  const removed = owned[owned.length - 1];
+  return { ok: true, state: stash({ ...r.state, vehicle: { ...r.state.vehicle, owned: owned.slice(0, -1) } }, city, removed) };
 }
