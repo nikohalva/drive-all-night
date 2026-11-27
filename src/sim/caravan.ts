@@ -1,5 +1,9 @@
 import { CITY_BY_ID, START_CITY, cityPrice, type CityDef } from '../config/cities';
 import { CREW } from '../config/crew';
+import type { SlotType } from '../config/catalog';
+import { PART_RESALE, PART_SCRAP } from '../config/outfit';
+import { PARTS } from '../config/catalog';
+import { escortStats } from './escort-stats';
 import {
   CARAVAN_CAP,
   ESCORT_FUEL_PER_SECOND,
@@ -19,6 +23,8 @@ export interface Escort {
   kind: EscortKind;
   tier: Tier;
   hp: number;
+  /** Upgrade parts bolted on, by slot. */
+  fitted?: Partial<Record<SlotType, string>>;
 }
 
 /** How far the lead alone can see mines and pirates coming, in px. */
@@ -60,7 +66,7 @@ export function caravanStats(s: GameState): CaravanStats {
   let wrecked = 0;
   const collectors: { id: number; radius: number }[] = [];
   for (const e of s.caravan) {
-    const def = escortDef(e.kind, e.tier);
+    const def = escortStats(e);
     cargoCap += def.cargoCap;
     tankCap += def.tankCap;
     topSpeed = Math.min(topSpeed, driverSpeed(s, e.id, def.speed));
@@ -117,7 +123,12 @@ export function buyEscort(s: GameState, kind: EscortKind, tier: Tier, city: City
 export function sellEscort(s: GameState, id: number): TxResult {
   const e = s.caravan.find((x) => x.id === id);
   if (!e) return fail('nothing');
-  const refund = Math.floor(escortDef(e.kind, e.tier).price * ESCORT_RESALE);
+  // whatever is bolted on goes with it
+  const parts = Object.values(e.fitted ?? {}).reduce((n, id) => {
+    const price = PARTS[id]?.price ?? 0;
+    return n + (price > 0 ? Math.floor(price * PART_RESALE) : PART_SCRAP);
+  }, 0);
+  const refund = Math.floor(escortDef(e.kind, e.tier).price * ESCORT_RESALE) + parts;
   const after: GameState = {
     ...s,
     credits: s.credits + refund,
@@ -138,12 +149,12 @@ export function sellEscort(s: GameState, id: number): TxResult {
 
 /** Repair escorts in caravan order, as far as the credits go. */
 export function repairEscorts(s: GameState, city: CityDef = HOME): TxResult {
-  const damaged = s.caravan.some((e) => e.hp < escortDef(e.kind, e.tier).hp);
+  const damaged = s.caravan.some((e) => e.hp < escortStats(e).hp);
   if (!damaged) return fail('nothing');
   let credits = s.credits;
   let healedAny = false;
   const caravan = s.caravan.map((e) => {
-    const missing = escortDef(e.kind, e.tier).hp - e.hp;
+    const missing = escortStats(e).hp - e.hp;
     if (missing <= 0) return e;
     const affordable = Math.floor(credits / city.repairPrice);
     const heal = Math.min(missing, affordable);

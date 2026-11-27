@@ -25,7 +25,9 @@ import {
 import type { GameState } from '../sim/game-state';
 import { hash2 } from '../sim/rng';
 import { saveGame } from '../sim/save';
-import { cycleFit, fitChoice, fitRows, shopRows, shopSection } from '../sim/shop';
+import { cycleFit, escortFitRows, fitChoice, fitRows, shopRows, shopSection, type FitRow } from '../sim/shop';
+import { fitEscort, partValue, sellPart, unfitEscort, type PartSource } from '../sim/outfit';
+import { escortStats } from '../sim/escort-stats';
 import { vehicleStats } from '../sim/vehicle';
 import { CITIES, CITY_BY_ID, START_CITY, type CityDef, type CityId } from '../config/cities';
 import { cityPos, nearestCopy } from '../sim/world';
@@ -33,10 +35,14 @@ import type { HullId } from '../config/catalog';
 import { CARAVAN_CAP, ESCORT_RESALE, ESCORT_ROLE, escortDef, type EscortKind, type Tier } from '../config/escorts';
 import { cityPrice } from '../config/cities';
 import { buyEscort, caravanStats, repairEscorts, sellEscort } from '../sim/caravan';
+import type { Escort } from '../sim/caravan';
 
 const W = VIEW.W;
 const H = VIEW.H;
 const TABS = ['SELL', 'SHOP', 'FIT', 'CARAVAN', 'CREW', 'GARAGE', 'BANK', 'SERVICES', 'SAVE', 'LEAVE'] as const;
+
+/** A spare part offered for sale on the SELL tab. */
+type SpareEntry = { part: string; from: PartSource };
 
 /** What a row on the GARAGE tab does. */
 type GarageEntry =
@@ -95,6 +101,8 @@ export class CityScene extends Phaser.Scene {
   private city: CityDef = CITY_BY_ID[START_CITY];
   /** Escort id waiting for a second Enter to confirm its sale. */
   private pendingSell: number | null = null;
+  /** Spare part row waiting for a second Enter to confirm its sale. */
+  private pendingPart: number | null = null;
 
   constructor() {
     super('city');
@@ -107,6 +115,7 @@ export class CityScene extends Phaser.Scene {
   create(): void {
     this.tab = 0;
     this.pendingSell = null;
+    this.pendingPart = null;
     this.cursors = TABS.map(() => 0);
     this.locked = false;
     this.lastSig = '';
@@ -169,12 +178,14 @@ export class CityScene extends Phaser.Scene {
   private moveTab(step: number): void {
     if (this.locked) return;
     this.pendingSell = null;
+    this.pendingPart = null;
     this.tab = (this.tab + step + TABS.length) % TABS.length;
   }
 
   private moveRow(step: number): void {
     if (this.locked) return;
     this.pendingSell = null;
+    this.pendingPart = null;
     const n = this.rows().length;
     if (n === 0) return;
     this.cursors[this.tab] = (this.cursors[this.tab] + step + n) % n;
@@ -199,51 +210,74 @@ export class CityScene extends Phaser.Scene {
     return false;
   }
 
-  /** Your rig's slots and the spares for them, then every other vehicle you have and where it is. */
+  /** Spares you can sell here: aboard, then in this city's garage. */
+  private spares(s: GameState): SpareEntry[] {
+    const stored = hasGarage(s, this.city.id) ? garageAt(s, this.city.id).parts : [];
+    return [
+      ...s.vehicle.owned.map((part): SpareEntry => ({ part, from: 'aboard' })),
+      ...stored.map((part): SpareEntry => ({ part, from: 'garage' })),
+    ];
+  }
+
+  /** Every slot and part choice on the FIT tab, your rig first, then the caravan in order. */
+  private fitRowsAll(s: GameState): FitRow[] {
+    return [...fitRows(s, this.city.id), ...s.caravan.flatMap((e) => escortFitRows(s, this.city.id, e.id))];
+  }
+
+  private escortSummary(e: Escort): string {
+    const st = escortStats(e);
+    return [
+      st.damage ? `DMG ${st.damage}` : '',
+      st.extraGun ? `+ ${st.extraGun.damage}` : '',
+      st.collectRadius ? `SWEEP ${st.collectRadius}` : '',
+      st.cargoCap ? `HOLD ${st.cargoCap}` : '',
+      st.tankCap ? `TANK ${st.tankCap}` : '',
+      st.heal ? `HEAL ${st.heal}` : '',
+      `ARM ${st.armor}`,
+      `SPD ${st.speed}`,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  /** Your vehicles and their slots with the spares for them, then whatever is parked. */
   private fitList(s: GameState): Row[] {
-    const rig = `YOUR RIG - ${s.vehicle.hullId.toUpperCase()} (IN USE)`;
-    const rows: Row[] = fitRows(s, this.city.id).map((r): Row =>
+    const heading = (target: FitRow['target']): string => {
+      if (target === 'rig') return `YOUR RIG - ${s.vehicle.hullId.toUpperCase()} (IN USE)`;
+      const at = s.caravan.findIndex((x) => x.id === target);
+      const e = s.caravan[at];
+      const note = e.hp <= 0 ? 'WRECKED' : isCrewed(s, e.id) ? `CREW ${crewAt(s, e.id).length}` : 'NO CREW';
+      return `${at + 1}. ${escortStats(e).name}  HP ${Math.ceil(e.hp)}/${escortStats(e).hp}  ${note}`;
+    };
+    const stats = (target: FitRow['target']): string => {
+      const e = s.caravan.find((x) => x.id === target);
+      return e ? this.escortSummary(e) : '';
+    };
+    const rows: Row[] = this.fitRowsAll(s).map((r): Row =>
       r.type === 'slot'
         ? {
-            section: rig,
+            section: heading(r.target),
             text: r.label,
             right: r.summary,
             color: r.partId ? PAL.white : '#7a6a9a',
-            detail: 'PICK A PART BELOW TO FIT IT.  U: REMOVE THIS ONE',
+            detail: r.target === 'rig' ? 'PICK A PART BELOW TO FIT IT.  U: REMOVE THIS ONE' : `${stats(r.target)}.  U: REMOVE`,
           }
         : {
-            section: rig,
+            section: heading(r.target),
             text: `   ${r.label}  (${r.from === 'aboard' ? 'ABOARD' : 'IN GARAGE'})`,
             right: r.delta,
             color: PAL.amber,
             detail: r.summary,
           },
     );
-    const vehicle = (section: string, kind: EscortKind, tier: Tier, hp: number, note: string): Row => {
-      const def = escortDef(kind, tier);
-      const stats = [
-        def.damage ? `DMG ${def.damage}` : '',
-        def.collectRadius ? `SWEEP ${def.collectRadius}` : '',
-        def.cargoCap ? `HOLD ${def.cargoCap}` : '',
-        def.tankCap ? `TANK ${def.tankCap}` : '',
-        def.heal ? `HEAL ${def.heal}` : '',
-        `ARM ${def.armor}`,
-        `SPD ${def.speed}`,
-      ].filter(Boolean);
-      return {
-        section,
-        text: `${def.name}  HP ${Math.ceil(hp)}/${def.hp}  ${note}`,
-        color: hp <= 0 ? PAL.red : PAL.cyanPale,
-        detail: `BUILT-IN GEAR: ${stats.join(' ')}`,
-      };
-    };
-    for (const e of s.caravan) {
-      const note = e.hp <= 0 ? 'WRECKED' : isCrewed(s, e.id) ? `CREW ${crewAt(s, e.id).length}` : 'NO CREW';
-      rows.push(vehicle('CARAVAN (IN USE)', e.kind, e.tier, e.hp, note));
-    }
     for (const city of CITIES) {
       for (const e of s.garages[city.id]?.vehicles ?? []) {
-        rows.push(vehicle(`PARKED AT ${city.name}`, e.kind, e.tier, e.hp, 'NOT IN USE'));
+        rows.push({
+          section: `PARKED AT ${city.name}`,
+          text: `${escortStats(e).name}  HP ${Math.ceil(e.hp)}/${escortStats(e).hp}  NOT IN USE`,
+          color: e.hp <= 0 ? PAL.red : PAL.cyanPale,
+          detail: `${this.escortSummary(e)}.  TAKE IT OUT TO FIT PARTS`,
+        });
       }
     }
     return rows;
@@ -285,8 +319,8 @@ export class CityScene extends Phaser.Scene {
     }
     const list = entry.kind === 'drive' ? g.vehicles : s.caravan;
     const e = list.find((v) => v.id === entry.id);
-    const name = e ? escortDef(e.kind, e.tier).name : '?';
-    const hp = e ? `HP ${Math.ceil(e.hp)}/${escortDef(e.kind, e.tier).hp}` : '';
+    const name = e ? escortStats(e).name : '?';
+    const hp = e ? `HP ${Math.ceil(e.hp)}/${escortStats(e).hp}` : '';
     return entry.kind === 'drive'
       ? { text: `TAKE OUT ${name}  ${hp}`, color: PAL.cyanPale, detail: holds }
       : { text: `PARK ${name}  ${hp}`, color: PAL.amber, detail: 'ITS CREW MOVES TO THE RESERVE' };
@@ -320,7 +354,7 @@ export class CityScene extends Phaser.Scene {
 
   private caravanEntries(s: GameState): CaravanEntry[] {
     const entries: CaravanEntry[] = [];
-    if (s.caravan.some((e) => e.hp < escortDef(e.kind, e.tier).hp)) entries.push({ kind: 'repair' });
+    if (s.caravan.some((e) => e.hp < escortStats(e).hp)) entries.push({ kind: 'repair' });
     for (const e of s.caravan) entries.push({ kind: 'own', id: e.id });
     for (const escort of this.city.escortStock) {
       for (const tier of [1, 2, 3] as Tier[]) entries.push({ kind: 'buy', escort, tier });
@@ -356,8 +390,21 @@ export class CityScene extends Phaser.Scene {
     this.cursors[this.tab] = cursor;
     switch (this.current()) {
       case 'SELL': {
-        const proceeds = Math.floor(s.vehicle.cargo * this.city.sellPrice);
-        this.apply(sellCargo(s, this.city), `SOLD CARGO FOR ${proceeds} CR`);
+        if (cursor === 0) {
+          const proceeds = Math.floor(s.vehicle.cargo * this.city.sellPrice);
+          this.apply(sellCargo(s, this.city), `SOLD CARGO FOR ${proceeds} CR`);
+          break;
+        }
+        const spare = this.spares(s)[cursor - 1];
+        if (!spare) break;
+        const name = PARTS[spare.part].name.toUpperCase();
+        if (this.pendingPart !== cursor) {
+          this.pendingPart = cursor;
+          this.say(`PRESS ENTER AGAIN TO SELL ${name}`, false);
+          break;
+        }
+        this.pendingPart = null;
+        this.apply(sellPart(s, this.city.id, spare.part, spare.from), `SOLD ${name} FOR ${partValue(spare.part)} CR`);
         break;
       }
       case 'SHOP': {
@@ -374,9 +421,15 @@ export class CityScene extends Phaser.Scene {
         break;
       }
       case 'FIT': {
-        const row = fitRows(s, this.city.id)[cursor];
-        if (!row) break; // the rows after the rig's slots only list your vehicles
-        if (row.type === 'option') {
+        const row = this.fitRowsAll(s)[cursor];
+        if (!row) break; // the last rows only list parked vehicles
+        if (row.target !== 'rig') {
+          if (row.type === 'option') {
+            this.apply(fitEscort(s, this.city.id, row.target, row.slot, row.partId, row.from), 'FITTED');
+          } else {
+            this.say('PICK A PART BELOW THE SLOT', false);
+          }
+        } else if (row.type === 'option') {
           this.apply(fitChoice(s, this.city.id, row.slot, row.index, row.partId, row.from), 'FITTED');
         } else if (s.vehicle.owned.some((id) => PARTS[id]?.slot === row.slot)) {
           this.apply(cycleFit(s, row.slot, row.index), 'FITTED');
@@ -428,8 +481,14 @@ export class CityScene extends Phaser.Scene {
 
   private unfit(): void {
     if (this.locked || this.current() !== 'FIT') return;
-    const row = fitRows(getState(), this.city.id)[this.cursors[this.tab]];
-    if (row) this.apply(unfitPart(getState(), row.slot, row.index, this.city), 'PART REMOVED');
+    const s = getState();
+    const row = this.fitRowsAll(s)[this.cursors[this.tab]];
+    if (!row) return;
+    const result =
+      row.target === 'rig'
+        ? unfitPart(s, row.slot, row.index, this.city)
+        : unfitEscort(s, this.city.id, row.target, row.slot);
+    this.apply(result, 'PART REMOVED');
   }
 
   /** Buying the largest hull ends the first playable's story, once. */
@@ -468,12 +527,20 @@ export class CityScene extends Phaser.Scene {
         const value = Math.floor(s.vehicle.cargo * this.city.sellPrice);
         return [
           {
+            section: 'CARGO',
             text: 'SELL ALL CARGO',
             right: `${value} CR`,
             color: PAL.amber,
             dim: s.vehicle.cargo <= 0,
             detail: `CARGO ${s.vehicle.cargo.toFixed(1)} X AT ${this.city.sellPrice} CR EACH${s.debt > 0 ? '. DEBT IS PAID FIRST' : ''}`,
           },
+          ...this.spares(s).map(({ part, from }): Row => ({
+            section: from === 'aboard' ? 'SPARE PARTS ABOARD' : 'SPARE PARTS IN THIS GARAGE',
+            text: `SELL ${PARTS[part].name.toUpperCase()}`,
+            right: `${partValue(part)} CR`,
+            color: PAL.cyanPale,
+            detail: `ENTER TWICE TO SELL${s.debt > 0 ? '. DEBT IS PAID FIRST' : ''}`,
+          })),
         ];
       }
       case 'SHOP':
@@ -502,7 +569,7 @@ export class CityScene extends Phaser.Scene {
         const cap = CARAVAN_CAP[s.vehicle.hullId];
         return this.caravanEntries(s).map((entry): Row => {
           if (entry.kind === 'repair') {
-            const missing = s.caravan.reduce((n, e) => n + Math.max(0, escortDef(e.kind, e.tier).hp - e.hp), 0);
+            const missing = s.caravan.reduce((n, e) => n + Math.max(0, escortStats(e).hp - e.hp), 0);
             return {
               text: 'REPAIR ESCORTS',
               right: `${Math.ceil(missing * this.city.repairPrice)} CR`,
@@ -512,7 +579,7 @@ export class CityScene extends Phaser.Scene {
           }
           if (entry.kind === 'own') {
             const e = s.caravan.find((x) => x.id === entry.id);
-            const def = e ? escortDef(e.kind, e.tier) : undefined;
+            const def = e ? escortStats(e) : undefined;
             if (!e || !def) return { text: '?', color: PAL.white };
             const wrecked = e.hp <= 0;
             return {

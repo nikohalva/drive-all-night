@@ -13,6 +13,12 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.8.0-alpha (2026-11-28)
+
+- Caravan vehicles can be fitted with parts, on top of their built-in gear
+- Spare parts can be sold on the SELL tab
+- Fix: removing armour, a tank or a hold from your rig trims hull, fuel and cargo to fit
+
 ### 0.7.0-alpha (2026-11-28)
 
 - The FIT page shows your rig's slots with the spare parts that can go in each, from aboard or this city's garage, and lists your caravan and parked vehicles

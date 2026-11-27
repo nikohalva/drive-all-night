@@ -1,5 +1,5 @@
 import type { Temper, Standing } from './barons';
-import { escortDef } from '../config/escorts';
+import { escortStats } from './escort-stats';
 import type { GameState } from './game-state';
 import type { PirateGroup } from './pirate-fleet';
 import type { Pirate } from './pirates';
@@ -35,7 +35,7 @@ export function baronChancePerSecond(zone: Zone, status: Standing, distToMine: n
 /** Robbers prey on the weak: a wrecked escort, or a lead under half its hull. */
 export function isCaravanWeak(s: GameState): boolean {
   if (s.vehicle.hp < vehicleStats(s.vehicle).maxHp * 0.5) return true;
-  return s.caravan.some((e) => e.hp <= 0 || e.hp < escortDef(e.kind, e.tier).hp * 0.25);
+  return s.caravan.some((e) => e.hp <= 0 || e.hp < escortStats(e).hp * 0.25);
 }
 
 const groupSize = (level: number, easy: boolean): number =>

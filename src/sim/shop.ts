@@ -2,6 +2,8 @@ import { HULLS, PARTS, REPAIR_KIT, SLOT_TYPES, type Part, type SlotType } from '
 import { CITY_BY_ID, START_CITY, type CityDef, type CityId } from '../config/cities';
 import { SPARE_SLOTS } from '../config/holdings';
 import { garageAt, hasGarage, stash } from './garage';
+import { ESCORT_SLOTS } from '../config/outfit';
+import { escortBonus } from './escort-stats';
 import { cityPrice, fitPart, type TxResult } from './economy';
 import type { GameState } from './game-state';
 
@@ -165,9 +167,10 @@ export function cycleFit(s: GameState, slot: SlotType, index: number): TxResult 
 
 /** A line of the FIT page: a slot of your rig, or a spare part that could go into it. */
 export type FitRow =
-  | { type: 'slot'; slot: SlotType; index: number; partId: string | null; label: string; summary: string }
+  | { type: 'slot'; target: 'rig' | number; slot: SlotType; index: number; partId: string | null; label: string; summary: string }
   | {
       type: 'option';
+      target: 'rig' | number;
       slot: SlotType;
       index: number;
       partId: string;
@@ -183,7 +186,7 @@ export function fitRows(s: GameState, city: CityId): FitRow[] {
   const rows: FitRow[] = [];
   for (const slot of garageRows(s)) {
     const current = slot.partId ? PARTS[slot.partId] : undefined;
-    rows.push({ type: 'slot', ...slot, summary: current ? partSummary(current) : '' });
+    rows.push({ type: 'slot', target: 'rig', ...slot, summary: current ? partSummary(current) : '' });
     const sources = [
       ['aboard', s.vehicle.owned],
       ['garage', stored],
@@ -195,6 +198,7 @@ export function fitRows(s: GameState, city: CityId): FitRow[] {
         const { key, label } = MAIN_STAT[slot.slot];
         rows.push({
           type: 'option',
+          target: 'rig',
           slot: slot.slot,
           index: slot.index,
           partId: id,
@@ -234,4 +238,49 @@ export function fitChoice(
   const owned = r.state.vehicle.owned;
   const removed = owned[owned.length - 1];
   return { ok: true, state: stash({ ...r.state, vehicle: { ...r.state.vehicle, owned: owned.slice(0, -1) } }, city, removed) };
+}
+
+/** The same for one escort in the caravan: its upgrade slots and what could go in them. */
+export function escortFitRows(s: GameState, city: CityId, id: number): FitRow[] {
+  const e = s.caravan.find((x) => x.id === id);
+  if (!e) return [];
+  const stored = hasGarage(s, city) ? garageAt(s, city).parts : [];
+  const rows: FitRow[] = [];
+  for (const slot of ESCORT_SLOTS[e.kind]) {
+    const partId = e.fitted?.[slot] ?? null;
+    const current = partId ? PARTS[partId] : undefined;
+    const name = current ? current.name.toUpperCase() : 'EMPTY';
+    const { label } = MAIN_STAT[slot];
+    rows.push({
+      type: 'slot',
+      target: id,
+      slot,
+      index: 0,
+      partId,
+      label: `${SLOT_NAME[slot]}: ${name}`,
+      summary: current ? `${label} +${escortBonus(current)}` : '',
+    });
+    const sources = [
+      ['aboard', s.vehicle.owned],
+      ['garage', stored],
+    ] as const;
+    for (const [from, parts] of sources) {
+      for (const spare of [...new Set(parts)].sort()) {
+        const part = PARTS[spare];
+        if (!part || part.slot !== slot) continue;
+        rows.push({
+          type: 'option',
+          target: id,
+          slot,
+          index: 0,
+          partId: spare,
+          from,
+          label: `FIT ${part.name.toUpperCase()}`,
+          summary: partSummary(part),
+          delta: `${label} ${signed(escortBonus(part) - (current ? escortBonus(current) : 0))}`,
+        });
+      }
+    }
+  }
+  return rows;
 }

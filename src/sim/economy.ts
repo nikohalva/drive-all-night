@@ -2,6 +2,7 @@ import { HULLS, PARTS, REPAIR_KIT, SLOT_TYPES, type HullId, type SlotType } from
 import { CITY_BY_ID, START_CITY, cityPrice, type CityDef } from '../config/cities';
 import { caravanStats } from './caravan';
 import { hasGarage, spareRoom, stash } from './garage';
+import { clampToCaps } from './outfit';
 import type { GameState } from './game-state';
 import { vehicleStats, type VehicleState } from './vehicle';
 
@@ -61,7 +62,7 @@ export function fitPart(s: GameState, partId: string, slot: SlotType, index: num
 
   const owned = s.vehicle.owned.filter((_, i) => i !== at);
   if (previous) owned.push(previous);
-  return done(withVehicle(s, { owned, fitted: { ...s.vehicle.fitted, [slot]: slotParts } }));
+  return done(clampToCaps(withVehicle(s, { owned, fitted: { ...s.vehicle.fitted, [slot]: slotParts } })));
 }
 
 export function unfitPart(s: GameState, slot: SlotType, index: number, city: CityDef = HOME): TxResult {
@@ -74,8 +75,8 @@ export function unfitPart(s: GameState, slot: SlotType, index: number, city: Cit
   const slotParts = [...s.vehicle.fitted[slot]];
   slotParts[index] = null;
   const removed = withVehicle(s, { fitted: { ...s.vehicle.fitted, [slot]: slotParts } });
-  if (spareRoom(s) > 0) return done(withVehicle(removed, { owned: [...s.vehicle.owned, previous] }));
-  return hasGarage(s, city.id) ? done(stash(removed, city.id, previous)) : fail('slot');
+  if (spareRoom(s) > 0) return done(clampToCaps(withVehicle(removed, { owned: [...s.vehicle.owned, previous] })));
+  return hasGarage(s, city.id) ? done(clampToCaps(stash(removed, city.id, previous))) : fail('slot');
 }
 
 /** Buy a bigger hull. Fitted parts carry over; buying the largest hull wins. */
