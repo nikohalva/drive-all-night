@@ -11,7 +11,9 @@ import {
   hireCrew,
   isCrewed,
   leadTopSpeed,
+  assignCrew,
   reassignCrew,
+  seatCandidate,
   recruitPool,
   seatsAt,
   treatCrew,
@@ -162,6 +164,50 @@ test('you cannot hire with every seat and the reserve full', () => {
   s = withCrew(s, ...[0, 1].map(() => person('driver', 1, 'lead')), ...[0, 1, 2].map(() => person('driver', 1, null)));
   const pool = recruitPool(s, CITY_BY_ID.ark);
   expect(hireCrew(s, CITY_BY_ID.ark, pool[0].key)).toEqual({ ok: false, reason: 'slot' });
+});
+
+/** A game with one captured, uncrewed escort (id 1). */
+const withEmptyShip = (): GameState => ({
+  ...rich(),
+  caravan: [{ id: 1, kind: 'gunship', tier: 1, hp: 20 }],
+  nextEscortId: 2,
+});
+
+test('a new hire goes to a vehicle nobody is running before anywhere else', () => {
+  const s = withEmptyShip();
+  const hired = ok(hireCrew(s, CITY_BY_ID.ark, recruitPool(s, CITY_BY_ID.ark)[0].key));
+  expect(hired.crew[0].post).toBe(1);
+  expect(isCrewed(hired, 1)).toBe(true);
+});
+
+test('an empty seat offers someone from the reserve, then from your rig', () => {
+  expect(seatCandidate(withEmptyShip(), 1)).toBeNull(); // only the captain: nobody to send
+  const onRig = withCrew(withEmptyShip(), person('driver', 1, 'lead'));
+  expect(seatCandidate(onRig, 1)).toEqual(onRig.crew[0]);
+  const both = withCrew(onRig, person('gunner', 1, null));
+  expect(seatCandidate(both, 1)).toEqual(both.crew[1]);
+  const moved = ok(assignCrew(both, both.crew[1].id, 1));
+  expect(moved.crew[1].post).toBe(1);
+});
+
+test('filling a seat never strips another escort of its only fit hand', () => {
+  let s = ok(buyEscort(rich(), 'scout', 1)); // escort 1, one green hand
+  s = { ...s, caravan: [...s.caravan, { id: 9, kind: 'tanker', tier: 1, hp: 40 }] };
+  expect(seatCandidate(s, 9)).toBeNull();
+  const spare = withCrew(s, person('driver', 1, 1));
+  expect(seatCandidate(spare, 9)).not.toBeNull();
+});
+
+test('someone can be taken off a vehicle into the reserve, if there is room there', () => {
+  const s = withCrew(newGame(1), person('driver', 1, 'lead'));
+  expect(ok(assignCrew(s, s.crew[0].id, null)).crew[0].post).toBeNull();
+  const full = withCrew(s, ...[0, 1, 2].map(() => person('driver', 1, null)));
+  expect(assignCrew(full, full.crew[0].id, null)).toEqual({ ok: false, reason: 'slot' });
+});
+
+test('you cannot assign someone to a full vehicle', () => {
+  const s = withCrew(newGame(1), person('driver', 1, 'lead'), person('medic', 1, 'lead'), person('gunner', 1, null));
+  expect(assignCrew(s, s.crew[2].id, 'lead')).toEqual({ ok: false, reason: 'slot' });
 });
 
 test('reassigning moves a person through the vehicles with room, then the reserve', () => {

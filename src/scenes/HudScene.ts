@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
 import { NIGHT_LEN } from '../config/balance';
+import { VERSION_LABEL } from '../config/version';
 import { VIEW } from '../config/view';
 import { getState, ui } from '../game/session';
 import { planetTimeLabel } from '../sim/clock';
@@ -177,10 +178,12 @@ export class HudScene extends Phaser.Scene {
     ctx.fillRect(MAP_X + d.mapPlayer - 1, BAR_Y + 4, 3, 1);
     ctx.fillRect(MAP_X + d.mapPlayer, BAR_Y + 5, 1, 4);
 
+    drawText(ctx, VERSION_LABEL, W - textWidth(VERSION_LABEL) - 6, 6, '#8a7aaa');
+
     // dawn countdown
     if (d.dawnLabel) {
       const label = `DAWN IN ${d.dawnLabel}`;
-      drawText(ctx, label, W - textWidth(label) - 6, 6, PAL.dawn, `${PAL.dawn}44`);
+      drawText(ctx, label, W - textWidth(label) - 6, 15, PAL.dawn, `${PAL.dawn}44`);
     }
 
     // warnings and prompts

@@ -62,6 +62,30 @@ export function seatsAt(s: GameState, post: Post): number {
 
 const hasRoom = (s: GameState, post: Post): boolean => crewAt(s, post).length < seatsAt(s, post);
 
+/** Where a newcomer sits: a vehicle nobody is running, else your rig, any free seat, the reserve. */
+function newPost(s: GameState): Post | undefined {
+  const unmanned = s.caravan.find((e) => !isCrewed(s, e.id) && hasRoom(s, e.id));
+  if (unmanned) return unmanned.id;
+  return (['lead', ...s.caravan.map((e) => e.id), null] as Post[]).find((p) => hasRoom(s, p));
+}
+
+/**
+ * Who would fill an empty seat: the reserve first, then your rig, then an escort with a fit
+ * person to spare. Fit people before hurt ones.
+ */
+export function seatCandidate(s: GameState, post: Post): CrewMember | null {
+  const spare = (m: CrewMember): boolean =>
+    typeof m.post !== 'number' || !isFit(m) || crewAt(s, m.post).filter(isFit).length > 1;
+  const rank = (m: CrewMember): number => (isFit(m) ? 0 : 10) + (m.post === null ? 0 : m.post === 'lead' ? 1 : 2);
+  return s.crew.filter((m) => m.post !== post && spare(m)).sort((a, b) => rank(a) - rank(b))[0] ?? null;
+}
+
+export function assignCrew(s: GameState, id: number, post: Post): TxResult {
+  if (!s.crew.some((m) => m.id === id)) return { ok: false, reason: 'nothing' };
+  if (!hasRoom(s, post)) return { ok: false, reason: 'slot' };
+  return { ok: true, state: { ...s, crew: s.crew.map((m) => (m.id === id ? { ...m, post } : m)) } };
+}
+
 /** Skill of the best fit person of a role aboard; 0 when there is none. */
 export function crewBonus(s: GameState, post: Post, role: CrewRole): number {
   return crewAt(s, post).reduce((best, m) => (m.role === role && isFit(m) ? Math.max(best, m.skill) : best), 0);
@@ -176,7 +200,7 @@ export function rookie(seed: number, id: number, kind: EscortKind, escortId: num
 
 /** Someone pulled out of a wreck. Null when there is no seat for them. */
 export function addSurvivor(s: GameState, seed: number): { state: GameState; member: CrewMember } | null {
-  const post = (['lead', ...s.caravan.map((e) => e.id), null] as Post[]).find((p) => hasRoom(s, p));
+  const post = newPost(s);
   if (post === undefined) return null;
   const rng = makeRng(seed);
   const skill: Skill = rng() < 0.8 ? 1 : 2;
@@ -208,7 +232,7 @@ export function recruitPool(s: GameState, city: CityDef): Recruit[] {
 export function hireCrew(s: GameState, city: CityDef, key: string): TxResult {
   const recruit = recruitPool(s, city).find((r) => r.key === key);
   if (!recruit) return { ok: false, reason: 'nothing' };
-  const post = ([ 'lead', ...s.caravan.map((e) => e.id), null] as Post[]).find((p) => hasRoom(s, p));
+  const post = newPost(s);
   if (post === undefined) return { ok: false, reason: 'slot' };
   if (s.credits < recruit.price) return { ok: false, reason: 'credits' };
   const { name, role, skill, trait, face } = recruit;

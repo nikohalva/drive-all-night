@@ -13,6 +13,13 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.5.1-alpha (2026-11-28)
+
+- Fix: free seats can be picked in the crew screen to bring someone in
+- Fix: new hires and survivors go first to a vehicle nobody is running
+- R in the crew screen takes someone off their vehicle; X pressed twice removes them from the crew
+- The version number is at the top right, on the title screen and while driving
+
 ### 0.5.0-alpha (2026-11-28)
 
 - Desert scenery: bones, fused glass, fallen pylons, rock spires, craters and old tracks
