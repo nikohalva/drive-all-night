@@ -9,9 +9,12 @@ import {
   FIRST_NAMES,
   LAST_NAMES,
   LEAD_SEATS,
+  PAY_PERIOD,
+  QUIT_AFTER,
   RESERVE_SEATS,
   ROOKIE_ROLE,
   TRAIT_IDS,
+  WAGE,
   escortSeats,
   type CrewRole,
   type Skill,
@@ -37,6 +40,10 @@ export interface CrewMember {
   /** Seed for the portrait. */
   face: number;
   post: Post;
+  /** Wages earned and not yet paid. */
+  owed: number;
+  /** Paydays skipped in a row; above 0 they work without a bonus. */
+  missed: number;
 }
 
 export interface Recruit {
@@ -54,7 +61,7 @@ export const crewAt = (s: GameState, post: Post): CrewMember[] => s.crew.filter(
 export const isCrewed = (s: GameState, escortId: number): boolean => crewAt(s, escortId).some(isFit);
 
 export function seatsAt(s: GameState, post: Post): number {
-  if (post === null) return RESERVE_SEATS;
+  if (post === null) return RESERVE_SEATS[s.vehicle.hullId];
   if (post === 'lead') return LEAD_SEATS[s.vehicle.hullId];
   const e = s.caravan.find((x) => x.id === post);
   return e ? escortSeats(e.tier) : 0;
@@ -88,12 +95,12 @@ export function assignCrew(s: GameState, id: number, post: Post): TxResult {
 
 /** Skill of the best fit person of a role aboard; 0 when there is none. */
 export function crewBonus(s: GameState, post: Post, role: CrewRole): number {
-  return crewAt(s, post).reduce((best, m) => (m.role === role && isFit(m) ? Math.max(best, m.skill) : best), 0);
+  return crewAt(s, post).reduce((best, m) => (m.role === role && isFit(m) && m.missed === 0 ? Math.max(best, m.skill) : best), 0);
 }
 
 /** The best of a role anywhere in the caravan (not counting the reserve). */
 export function caravanBonus(s: GameState, role: CrewRole): number {
-  return s.crew.reduce((best, m) => (m.post !== null && m.role === role && isFit(m) ? Math.max(best, m.skill) : best), 0);
+  return s.crew.reduce((best, m) => (m.post !== null && m.role === role && isFit(m) && m.missed === 0 ? Math.max(best, m.skill) : best), 0);
 }
 
 export const driverSpeed = (s: GameState, post: Post, base: number): number =>
@@ -111,14 +118,62 @@ export function crewGun<T extends { damage: number; accuracy: number }>(s: GameS
   };
 }
 
+/** What this person earns per pay period where they sit now. */
+export const wageOf = (m: CrewMember): number => WAGE[m.skill] * (m.post === null ? 0.5 : 1);
+
+/** Whole credits owed to everyone. */
+export const wagesDue = (s: GameState): number => s.crew.reduce((n, m) => n + Math.floor(m.owed), 0);
+
+/** Pay what you can, one person at a time: longest unpaid first, then the cheapest. */
+export function payWages(s: GameState): TxResult {
+  if (wagesDue(s) <= 0) return { ok: false, reason: 'nothing' };
+  let credits = s.credits;
+  const paid = new Set<number>();
+  for (const m of [...s.crew].sort((a, b) => b.missed - a.missed || a.owed - b.owed)) {
+    const sum = Math.floor(m.owed);
+    if (sum <= 0 || sum > credits) continue;
+    credits -= sum;
+    paid.add(m.id);
+  }
+  if (paid.size === 0) return { ok: false, reason: 'credits' };
+  // the fraction of a credit still being earned carries on
+  const crew = s.crew.map((m) => (paid.has(m.id) ? { ...m, owed: m.owed % 1, missed: 0 } : m));
+  return { ok: true, state: { ...s, credits, crew } };
+}
+
+/** Leaving a city: whoever is owed half a period or more has missed a payday. */
+export function settlePayday(s: GameState): { state: GameState; report: string[] } {
+  const report: string[] = [];
+  const crew: CrewMember[] = [];
+  let changed = false;
+  let grumbling = false;
+  for (const m of s.crew) {
+    if (m.owed < wageOf(m) / 2) {
+      crew.push(m);
+      continue;
+    }
+    changed = true;
+    if (m.missed + 1 >= QUIT_AFTER) {
+      report.push(`${m.name} QUITS`);
+    } else {
+      grumbling = true;
+      crew.push({ ...m, missed: m.missed + 1 });
+    }
+  }
+  if (grumbling) report.push('UNPAID CREW GIVE NO BONUS');
+  return changed ? { state: { ...s, crew }, report } : { state: s, report };
+}
+
 /** Time passing on the road: wounds close and mechanics patch their own vehicle. */
 export function crewTime(s: GameState, dt: number): GameState {
   if (dt <= 0) return s;
   const medic = caravanBonus(s, 'medic');
   const rate = CREW.HEAL_PER_SECOND + CREW.MEDIC_HEAL_PER_SECOND * medic;
-  const crew = s.crew.map((m) =>
-    m.health >= 100 ? m : { ...m, health: Math.min(100, m.health + rate * (m.trait === 'hardy' ? 2 : 1) * dt) },
-  );
+  const crew = s.crew.map((m) => ({
+    ...m,
+    health: Math.min(100, m.health + rate * (m.trait === 'hardy' ? 2 : 1) * dt),
+    owed: m.owed + (wageOf(m) * dt) / PAY_PERIOD,
+  }));
 
   const patched = (post: Post, hp: number, maxHp: number): number => {
     const limit = maxHp * CREW.MECHANIC_LIMIT;
@@ -195,7 +250,7 @@ function person(rng: Rng): { name: string; trait: TraitId; face: number } {
 /** The green hand who comes with a newly bought escort. */
 export function rookie(seed: number, id: number, kind: EscortKind, escortId: number): CrewMember {
   const rng = makeRng(Math.floor(hash2(seed, id, 7919) * 4294967296));
-  return { id, ...person(rng), role: ROOKIE_ROLE[kind], skill: 0, health: 100, post: escortId };
+  return { id, ...person(rng), role: ROOKIE_ROLE[kind], skill: 0, health: 100, post: escortId, owed: 0, missed: 0 };
 }
 
 /** Someone pulled out of a wreck. Null when there is no seat for them. */
@@ -206,7 +261,7 @@ export function addSurvivor(s: GameState, seed: number): { state: GameState; mem
   const skill: Skill = rng() < 0.8 ? 1 : 2;
   const role = pick(rng, CREW_ROLES);
   // they come out of it hurt
-  const member: CrewMember = { id: s.nextCrewId, ...person(rng), role, skill, health: 60, post };
+  const member: CrewMember = { id: s.nextCrewId, ...person(rng), role, skill, health: 60, post, owed: 0, missed: 0 };
   return { state: { ...s, crew: [...s.crew, member], nextCrewId: s.nextCrewId + 1 }, member };
 }
 
@@ -241,7 +296,7 @@ export function hireCrew(s: GameState, city: CityDef, key: string): TxResult {
     state: {
       ...s,
       credits: s.credits - recruit.price,
-      crew: [...s.crew, { id: s.nextCrewId, name, role, skill, trait, face, health: 100, post }],
+      crew: [...s.crew, { id: s.nextCrewId, name, role, skill, trait, face, health: 100, post, owed: 0, missed: 0 }],
       nextCrewId: s.nextCrewId + 1,
       // old keys can never come up again, so only the latest need remembering
       hired: [...s.hired, key].slice(-24),

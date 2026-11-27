@@ -1,17 +1,17 @@
 import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PORTRAIT, portrait } from '../art/portraits';
-import { ROLE_EFFECT, ROLE_NAME, SKILL_NAME, TRAITS } from '../config/crew';
+import { PAY_PERIOD, ROLE_EFFECT, ROLE_NAME, SKILL_NAME, TRAITS, WAGE } from '../config/crew';
 import { BANK_STEP, GARAGE_PRICE, GARAGE_RENT, GARAGE_VEHICLES, RENT_SECONDS, SPARE_SLOTS } from '../config/holdings';
 import { PARTS } from '../config/catalog';
 import { asOnePurse, deposit, funds, payInCity, withdraw } from '../sim/bank';
 import { buyGarage, garageAt, hasGarage, parkEscort, rentGarage, storePart, takeEscort, takePart } from '../sim/garage';
-import { hireCrew, recruitPool, treatCrew, treatmentCost } from '../sim/crew';
+import { hireCrew, payWages, recruitPool, settlePayday, treatCrew, treatmentCost, wagesDue } from '../sim/crew';
 import { PAL } from '../art/palette';
 import { rigSignature } from '../art/painters';
 import { ensureRigTextures } from '../art/textures';
 import { VIEW } from '../config/view';
-import { getState, setState } from '../game/session';
+import { getState, setState, ui } from '../game/session';
 import {
   buyHull,
   buyPart,
@@ -121,7 +121,9 @@ export class CityScene extends Phaser.Scene {
 
     // docking autosaves, so every visit is a checkpoint
     const saved = saveGame(getState());
-    this.message = { text: saved ? 'DOCKED. GAME AUTOSAVED' : 'DOCKED. COULD NOT SAVE', good: saved };
+    const due = wagesDue(getState());
+    const docked = saved ? 'DOCKED. GAME AUTOSAVED' : 'DOCKED. COULD NOT SAVE';
+    this.message = { text: due > 0 ? `${docked}. CREW WAGES DUE: ${due} CR (CREW TAB)` : docked, good: saved };
 
     this.bindKeys();
     this.events.off('crew-done');
@@ -350,7 +352,11 @@ export class CityScene extends Phaser.Scene {
           this.scene.launch('crew', { from: 'city' });
           return;
         }
-        const recruit = recruitPool(s, this.city)[cursor - 1];
+        if (cursor === 1) {
+          this.apply(payInCity(s, payWages), 'WAGES PAID');
+          break;
+        }
+        const recruit = recruitPool(s, this.city)[cursor - 2];
         if (recruit) this.apply(payInCity(s, (p) => hireCrew(p, this.city, recruit.key)), `${recruit.name} SIGNS ON`);
         break;
       }
@@ -386,7 +392,13 @@ export class CityScene extends Phaser.Scene {
 
   private leave(): void {
     if (this.locked) return;
-    const s = getState();
+    // rolling out is the end of payday
+    const payday = settlePayday(getState());
+    const s = payday.state;
+    if (payday.report.length > 0) {
+      ui.toast = payday.report.slice(-3).join('. ');
+      ui.toastUntil = this.game.loop.time + 6000;
+    }
     const city = cityPos(this.city.id, s.t);
     setState({
       ...s,
@@ -494,12 +506,19 @@ export class CityScene extends Phaser.Scene {
             color: PAL.cyan,
             detail: 'SEE, MOVE AND DISMISS. ALSO C ON THE ROAD',
           },
+          {
+            text: 'PAY WAGES',
+            right: `${wagesDue(s)} CR`,
+            color: PAL.pink,
+            dim: wagesDue(s) <= 0 || funds(s) <= 0,
+            detail: 'LEAVE UNPAID: NO BONUS. TWICE IN A ROW: THEY QUIT',
+          },
           ...recruitPool(s, this.city).map((r) => ({
             text: `HIRE ${r.name}  ${SKILL_NAME[r.skill]} ${ROLE_NAME[r.role]}`,
             right: `${r.price} CR`,
             color: PAL.amber,
             dim: funds(s) < r.price,
-            detail: `${ROLE_EFFECT[r.role]}. ${TRAITS[r.trait].name}`,
+            detail: `${ROLE_EFFECT[r.role]}. ${TRAITS[r.trait].name}. WAGE ${WAGE[r.skill]} PER ${PAY_PERIOD / 60} MIN`,
           })),
         ];
       case 'SERVICES': {
@@ -688,7 +707,7 @@ export class CityScene extends Phaser.Scene {
     lines.slice(0, 9).forEach((line, i) => this.text(ctx, line, SIDE_X + 6, LIST_Y + 160 + i * 9, i < 5 ? PAL.white : PAL.amber));
 
     // the face of the recruit being considered covers the rig
-    const face = this.current() === 'CREW' && cursor > 0 ? recruitPool(s, this.city)[cursor - 1] : undefined;
+    const face = this.current() === 'CREW' && cursor > 1 ? recruitPool(s, this.city)[cursor - 2] : undefined;
     this.rig.setVisible(!face);
     if (face) {
       const size = PORTRAIT * 5;

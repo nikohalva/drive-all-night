@@ -51,7 +51,15 @@ export const LAST_NAMES = [
 /** Hire seats on the lead rig, not counting the captain. */
 export const LEAD_SEATS: Record<HullId, number> = { scout: 2, hauler: 4, juggernaut: 5 };
 export const escortSeats = (tier: Tier): number => tier + 1;
-export const RESERVE_SEATS = 3;
+/** People who can wait without a seat. Their wages keep hoarding in check. */
+export const RESERVE_SEATS: Record<HullId, number> = { scout: 3, hauler: 6, juggernaut: 10 };
+
+/** World seconds of road that one wage pays for. */
+export const PAY_PERIOD = 1200;
+/** Wage per pay period, by skill. The reserve earns half. */
+export const WAGE = [10, 25, 60, 140] as const;
+/** Skipped paydays before someone walks. */
+export const QUIT_AFTER = 2;
 
 /** Who runs a newly bought escort. */
 export const ROOKIE_ROLE: Record<EscortKind, CrewRole> = {

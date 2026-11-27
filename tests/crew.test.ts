@@ -39,6 +39,8 @@ const person = (role: CrewRole, skill: Skill, post: Post, trait: TraitId = 'grum
   health,
   face: nextId,
   post,
+  owed: 0,
+  missed: 0,
 });
 const withCrew = (s: GameState, ...crew: CrewMember[]): GameState => ({ ...s, crew: [...s.crew, ...crew] });
 
@@ -250,7 +252,7 @@ test('crew survive a save, and an older save gets a hand for every escort', () =
   delete old.nextCrewId;
   delete old.hired;
   const loaded = deserialize(JSON.stringify(old))!;
-  expect(loaded.version).toBe(7);
+  expect(loaded.version).toBe(8);
   expect(loaded.crew).toHaveLength(1);
   expect(isCrewed(loaded, 1)).toBe(true);
 });

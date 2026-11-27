@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.5.1-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.6.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Controls
 
@@ -117,7 +117,7 @@ Only the best fit person of each role counts in a vehicle.
 | Thrifty | 30% cheaper to hire |
 | Dreamer, Grump, Joker | colour only |
 
-- **Seats:** your rig has 2 / 4 / 5 by hull; an escort has its MK number plus one; the reserve holds 3.
+- **Seats:** your rig has 2 / 4 / 5 by hull; an escort has its MK number plus one; the reserve holds 3 / 6 / 10 by hull.
 - **Removing:** press R on a person to take them off their vehicle (into the reserve), or X twice to remove them from the crew.
 - **Filling a seat:** press C, pick a vehicle's empty seat and press Enter. New hires go first to a vehicle nobody is running.
 - **Escorts need someone fit aboard**, or they are towed: no guns, sweeping or scouting.
@@ -125,6 +125,21 @@ Only the best fit person of each role counts in a vehicle.
 - **Wounds** come from battle damage; a wrecked vehicle is very dangerous.
 - **Healing** happens slowly on the road, or at once in a city (SERVICES, 1 credit per health point).
 - **Recruits:** four per city, changing every 15 minutes.
+
+## Wages
+
+| Skill | Per 20 minutes on the road |
+|---|---|
+| Green | 10 |
+| Able | 25 |
+| Seasoned | 60 |
+| Legend | 140 |
+
+- Wages build up while you drive. The reserve earns half. The Road Captain takes none.
+- Pay under **CREW → PAY WAGES** in a city, from carried credits first, then the bank. If you cannot pay everyone, those longest unpaid are paid first.
+- A payday is missed when you leave a city still owing someone half a period's wage or more.
+- After one missed payday they give no bonus (they still run their vehicle). After two in a row they quit.
+- Removing someone from the crew cancels what they are owed.
 
 ## Cities
 

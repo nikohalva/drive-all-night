@@ -8,7 +8,7 @@ import type { GameState } from './game-state';
 
 export const SAVE_KEY = 'drive-all-night/save-v1';
 /** The save format this build writes; older formats are upgraded on load. */
-export const CURRENT_SAVE_VERSION = 7;
+export const CURRENT_SAVE_VERSION = 8;
 
 export interface KV {
   getItem(k: string): string | null;
@@ -50,6 +50,7 @@ function looksLikeGameState(x: unknown): x is GameState {
     if (!CREW_ROLES.includes(m.role as never) || !TRAIT_IDS.includes(m.trait as never)) return false;
     if (![0, 1, 2, 3].includes(m.skill as number)) return false;
     if (m.post !== null && m.post !== 'lead' && !isNum(m.post)) return false;
+    if (!isNum(m.owed) || !isNum(m.missed)) return false;
   }
   if (!isNum(x.bank) || !isObj(x.garages)) return false;
   for (const g of Object.values(x.garages)) {
@@ -100,6 +101,10 @@ function upgrade(x: unknown): unknown {
     v = { ...v, version: 6, bank: 0, garages: { [HOME_GARAGE]: home } };
   }
   if (v.version === 6) v = { ...v, version: 7, wrecks: { found: [], searched: [] } };
+  if (v.version === 7) {
+    const crew = Array.isArray(v.crew) ? v.crew.map((m) => (isObj(m) ? { ...m, owed: 0, missed: 0 } : m)) : v.crew;
+    v = { ...v, version: 8, crew };
+  }
   return v;
 }
 
