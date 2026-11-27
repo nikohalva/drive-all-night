@@ -363,6 +363,7 @@ export function applyBattleResult(
     const { v } = addCargo(vehicle, loot.cargo, caravanStats(next).cargoCap);
     return { ...next, vehicle: v, credits: s.credits + loot.credits };
   }
-  if (b.outcome === 'lost') return { ...next, vehicle: { ...vehicle, hp: 0, cargo: 0 } };
+  // the winners strip the cargo and every credit you carry; the bank is out of their reach
+  if (b.outcome === 'lost') return { ...next, credits: 0, vehicle: { ...vehicle, hp: 0, cargo: 0 } };
   return next;
 }

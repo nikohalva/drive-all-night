@@ -2,6 +2,7 @@ import { BALANCE } from '../config/balance';
 import { PARTS } from '../config/catalog';
 import { CITY_LANES, LANE_HALF } from '../config/cities';
 import type { TxResult } from './economy';
+import { spareRoom } from './garage';
 import type { GameState } from './game-state';
 import { hash2 } from './rng';
 import { isPassable, terrainAt } from './terrain';
@@ -173,7 +174,7 @@ export function adjustStanding(s: GameState, mineId: string, delta: number): Gam
   return { ...s, barons: { ...s.barons, [mineId]: { ...r, standing } } };
 }
 
-const fail = (reason: 'credits' | 'nothing' | 'refused'): TxResult => ({ ok: false, reason });
+const fail = (reason: 'credits' | 'nothing' | 'refused' | 'slot'): TxResult => ({ ok: false, reason });
 
 export function tributeX(s: GameState, mineId: string): TxResult {
   if (s.vehicle.cargo < TRIBUTE_X) return fail('nothing');
@@ -213,6 +214,7 @@ export function buyFromBaron(s: GameState, mineId: string, partId: string): TxRe
   if (status === 'HOSTILE' || status === 'WARY') return fail('refused');
   const price = baronPrice(part.price, r);
   if (s.credits < price) return fail('credits');
+  if (spareRoom(s) === 0) return fail('slot');
   return {
     ok: true,
     state: { ...s, credits: s.credits - price, vehicle: { ...s.vehicle, owned: [...s.vehicle.owned, partId] } },

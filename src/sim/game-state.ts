@@ -1,5 +1,8 @@
 import type { Escort } from './caravan';
+import type { CityId } from '../config/cities';
+import { HOME_GARAGE } from '../config/holdings';
 import type { CrewMember } from './crew';
+import type { Garage } from './garage';
 import { starterVehicle, type VehicleState } from './vehicle';
 import { cityPosition } from './world';
 
@@ -13,7 +16,7 @@ export interface GameFlags {
 }
 
 export interface GameState {
-  version: 5;
+  version: 6;
   seed: number;
   /** World seconds (play time with the world clock running). */
   t: number;
@@ -32,6 +35,10 @@ export interface GameState {
   nextCrewId: number;
   /** Recruit keys already signed on, so they are not offered again. */
   hired: string[];
+  /** Credits in the cities' bank, safe from raiders. */
+  bank: number;
+  /** Garages bought or rented, by city. */
+  garages: Partial<Record<CityId, Garage>>;
   /** Standing with each night baron you have dealt with (mine id -> relation). */
   barons: Record<string, { standing: number; allied: boolean }>;
 }
@@ -40,7 +47,7 @@ export interface GameState {
 export function newGame(seed: number): GameState {
   const city = cityPosition(0);
   return {
-    version: 5,
+    version: 6,
     seed,
     t: 0,
     player: { x: city.x + 40, y: city.y, heading: -Math.PI / 2 },
@@ -54,6 +61,8 @@ export function newGame(seed: number): GameState {
     crew: [],
     nextCrewId: 1,
     hired: [],
+    bank: 0,
+    garages: { [HOME_GARAGE]: { owned: true, rentUntil: 0, parts: [], vehicles: [] } },
     barons: {},
   };
 }

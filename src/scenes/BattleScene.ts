@@ -23,6 +23,7 @@ import {
 } from '../sim/battle';
 import { applyInjuries } from '../sim/crew';
 import type { Pirate } from '../sim/pirates';
+import { applySalvage } from '../sim/salvage';
 import { makeRng, randomSeed } from '../sim/rng';
 
 const W = VIEW.W;
@@ -297,22 +298,29 @@ export class BattleScene extends Phaser.Scene {
   private finish(): void {
     const state = getState();
     const loot = this.battle.outcome === 'won' ? battleLoot(this.enemies0, this.rng) : { credits: 0, cargo: 0 };
-    const { state: next, report } = applyInjuries(state, applyBattleResult(state, this.battle, loot), this.rng);
+    const hurt = applyInjuries(state, applyBattleResult(state, this.battle, loot), this.rng);
+    const salvage =
+      this.battle.outcome === 'won' ? applySalvage(hurt.state, this.enemies0, this.rng) : { state: hurt.state, report: [] };
+    const next = salvage.state;
+    const report = hurt.report;
     setState(next);
-    const wrecked = next.caravan.filter((e) => e.hp <= 0).length - state.caravan.filter((e) => e.hp <= 0).length;
+    const wrecked = hurt.state.caravan.filter((e) => e.hp <= 0).length - state.caravan.filter((e) => e.hp <= 0).length;
     if (this.battle.outcome === 'won') {
       const gained = Math.round(next.vehicle.cargo - state.vehicle.cargo);
       this.resultLines = ['VICTORY', `+${loot.credits} CR   +${gained} X`];
     } else if (this.battle.outcome === 'fled') {
       this.resultLines = ['THE CARAVAN GOT AWAY'];
     } else {
+      const taken = Math.floor(state.credits);
       this.resultLines = ['THEY STRIPPED YOUR CARGO'];
+      if (taken > 0) this.resultLines.push(`AND TOOK ${taken} CR`);
     }
     if (wrecked > 0) this.resultLines.push(`${wrecked} ESCORT${wrecked > 1 ? 'S' : ''} WRECKED - REPAIR IN A CITY`);
-    if (report.length > 4) report.splice(3, report.length - 3, `AND ${report.length - 3} MORE CASUALTIES`);
-    this.resultLines.push(...report);
-    // casualties need time to be read
-    this.time.delayedCall(RESULT_MS + report.length * 700, () => {
+    if (report.length > 3) report.splice(2, report.length - 2, `AND ${report.length - 2} MORE CASUALTIES`);
+    const news = [...salvage.report.slice(0, 3), ...report];
+    this.resultLines.push(...news);
+    // salvage and casualties need time to be read
+    this.time.delayedCall(RESULT_MS + news.length * 700, () => {
       const outcome = this.battle.outcome;
       this.scene.stop();
       this.scene.get('drive').events.emit('battle-done', outcome);
@@ -443,10 +451,10 @@ export class BattleScene extends Phaser.Scene {
 
     if (this.resultLines.length) {
       ctx.fillStyle = 'rgba(7,3,12,0.75)';
-      ctx.fillRect(0, 110, W, 24 + this.resultLines.length * 20);
+      ctx.fillRect(0, 90, W, 24 + this.resultLines.length * 18);
       this.resultLines.forEach((line, i) => {
         const scale = i === 0 ? 2 : 1;
-        this.text(ctx, line, (W - textWidth(line) * scale) / 2, 120 + i * 20, i === 0 ? PAL.amber : PAL.white, scale);
+        this.text(ctx, line, (W - textWidth(line) * scale) / 2, 100 + i * 18, i === 0 ? PAL.amber : PAL.white, scale);
       });
     }
   }

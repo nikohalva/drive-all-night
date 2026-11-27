@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.3.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.4.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Controls
 
@@ -133,6 +133,23 @@ Only the best fit person of each role counts in a vehicle.
 | Ember Spire | 6 | 8 | 1 | 1.05 | armor, weapons, tanks | guardian, gunship, medic |
 
 Cities that trail farther behind the sunset pay more for Particle X. The game is saved when you dock.
+
+## Bank
+
+Deposit and withdraw in any city (all or 500 at a time). Mines are not part of the bank. Losing a fight takes your cargo and every credit you carry; banked credits are safe. Purchases use carried credits only.
+
+## Garages
+
+- You own the garage in Dusk Citadel from the start.
+- In other cities: buy for 3000, or rent for 200 per 20 minutes. Contents stay if the rent lapses; pay again to reach them.
+- A garage holds any number of parts and up to 6 vehicles. A parked vehicle's crew moves to the reserve.
+- The rig carries 3 / 6 / 10 spare parts by hull. With no room, a part bought or removed goes to your garage in that city, if you have one.
+
+## Salvage
+
+- Each beaten enemy: 25% chance of a spare part (tier 2; sometimes tier 3 from level 8).
+- Each won fight: 6% plus 0.5% per enemy level to capture a vehicle (MK1, or MK2 from level 8). It arrives with 30% hull and no crew.
+- Anything you have no room for is left behind.
 
 ## Night barons
 
