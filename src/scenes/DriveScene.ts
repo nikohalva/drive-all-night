@@ -498,7 +498,7 @@ export class DriveScene extends Phaser.Scene {
     this.frozen = true;
     this.k = { ...this.k, vx: 0, vy: 0 };
     this.pirates.clear();
-    this.scene.launch('city', { cityId: this.dockCity });
+    this.scene.launch('arrival', { cityId: this.dockCity });
   }
 
   /** Safety net: never leave the rig standing on blocked ground, where it could not move at all. */

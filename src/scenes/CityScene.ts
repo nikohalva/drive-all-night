@@ -18,7 +18,6 @@ import {
   buyRepairKit,
   refuelFull,
   repairFull,
-  sellCargo,
   unfitPart,
   type TxResult,
 } from '../sim/economy';
@@ -39,7 +38,7 @@ import type { Escort } from '../sim/caravan';
 
 const W = VIEW.W;
 const H = VIEW.H;
-const TABS = ['SELL', 'SHOP', 'FIT', 'CARAVAN', 'CREW', 'GARAGE', 'BANK', 'SERVICES', 'SAVE', 'LEAVE'] as const;
+const TABS = ['SHOP', 'FIT', 'CARAVAN', 'CREW', 'GARAGE', 'BANK', 'SERVICES', 'SAVE', 'LEAVE'] as const;
 
 /** A spare part offered for sale on the SELL tab. */
 type SpareEntry = { part: string; from: PartSource };
@@ -208,6 +207,20 @@ export class CityScene extends Phaser.Scene {
     }
     this.say(REASONS[result.reason] ?? 'NOT POSSIBLE', false);
     return false;
+  }
+
+  /** Sell a spare from the shop list: the first Enter asks, the second sells. */
+  private sellSpare(s: GameState, cursor: number, index: number): void {
+    const spare = this.spares(s)[index];
+    if (!spare) return;
+    const name = PARTS[spare.part].name.toUpperCase();
+    if (this.pendingPart !== cursor) {
+      this.pendingPart = cursor;
+      this.say(`PRESS ENTER AGAIN TO SELL ${name}`, false);
+      return;
+    }
+    this.pendingPart = null;
+    this.apply(sellPart(s, this.city.id, spare.part, spare.from), `SOLD ${name} FOR ${partValue(spare.part)} CR`);
   }
 
   /** Spares you can sell here: aboard, then in this city's garage. */
@@ -389,27 +402,13 @@ export class CityScene extends Phaser.Scene {
     const cursor = Math.max(0, Math.min(this.cursors[this.tab], this.rows().length - 1));
     this.cursors[this.tab] = cursor;
     switch (this.current()) {
-      case 'SELL': {
-        if (cursor === 0) {
-          const proceeds = Math.floor(s.vehicle.cargo * this.city.sellPrice);
-          this.apply(sellCargo(s, this.city), `SOLD CARGO FOR ${proceeds} CR`);
-          break;
-        }
-        const spare = this.spares(s)[cursor - 1];
-        if (!spare) break;
-        const name = PARTS[spare.part].name.toUpperCase();
-        if (this.pendingPart !== cursor) {
-          this.pendingPart = cursor;
-          this.say(`PRESS ENTER AGAIN TO SELL ${name}`, false);
-          break;
-        }
-        this.pendingPart = null;
-        this.apply(sellPart(s, this.city.id, spare.part, spare.from), `SOLD ${name} FOR ${partValue(spare.part)} CR`);
-        break;
-      }
       case 'SHOP': {
-        const row = shopRows(s, this.city)[cursor];
-        if (!row) break;
+        const wares = shopRows(s, this.city);
+        const row = wares[cursor];
+        if (!row) {
+          this.sellSpare(s, cursor, cursor - wares.length);
+          break;
+        }
         const result = payInCity(s, (p) =>
           row.kind === 'hull'
             ? buyHull(p, row.id as HullId, this.city)
@@ -523,35 +522,22 @@ export class CityScene extends Phaser.Scene {
   private rows(): Row[] {
     const s = getState();
     switch (this.current()) {
-      case 'SELL': {
-        const value = Math.floor(s.vehicle.cargo * this.city.sellPrice);
-        return [
-          {
-            section: 'CARGO',
-            text: 'SELL ALL CARGO',
-            right: `${value} CR`,
-            color: PAL.amber,
-            dim: s.vehicle.cargo <= 0,
-            detail: `CARGO ${s.vehicle.cargo.toFixed(1)} X AT ${this.city.sellPrice} CR EACH${s.debt > 0 ? '. DEBT IS PAID FIRST' : ''}`,
-          },
-          ...this.spares(s).map(({ part, from }): Row => ({
-            section: from === 'aboard' ? 'SPARE PARTS ABOARD' : 'SPARE PARTS IN THIS GARAGE',
-            text: `SELL ${PARTS[part].name.toUpperCase()}`,
-            right: `${partValue(part)} CR`,
-            color: PAL.cyanPale,
-            detail: `ENTER TWICE TO SELL${s.debt > 0 ? '. DEBT IS PAID FIRST' : ''}`,
-          })),
-        ];
-      }
       case 'SHOP':
-        return shopRows(asOnePurse(s), this.city).map((r) => ({
+        return [...shopRows(asOnePurse(s), this.city).map((r): Row => ({
           section: shopSection(r),
           text: r.name,
           right: `${r.price} CR`,
           color: r.kind === 'hull' ? PAL.pink : r.kind === 'kit' ? PAL.cyanPale : PAL.amber,
           dim: !r.affordable,
           detail: `${r.summary}   ${r.delta}`,
-        }));
+        })),
+        ...this.spares(s).map(({ part, from }): Row => ({
+          section: from === 'aboard' ? 'SELL: SPARES ABOARD' : 'SELL: SPARES IN THIS GARAGE',
+          text: `SELL ${PARTS[part].name.toUpperCase()}`,
+          right: `+${partValue(part)} CR`,
+          color: PAL.cyanPale,
+          detail: `ENTER TWICE TO SELL${s.debt > 0 ? '. DEBT IS PAID FIRST' : ''}`,
+        }))];
       case 'FIT':
         return this.fitList(s);
       case 'GARAGE':
