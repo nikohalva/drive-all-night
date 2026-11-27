@@ -13,6 +13,11 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.9.0-alpha (2026-11-28)
+
+- Docking opens an arrival screen: sell your Particle X or keep it, then pay the crew or not
+- Spare parts are sold in the shop; the SELL tab is gone
+
 ### 0.8.0-alpha (2026-11-28)
 
 - Caravan vehicles can be fitted with parts, on top of their built-in gear

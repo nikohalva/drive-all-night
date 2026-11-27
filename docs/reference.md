@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.8.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.9.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Controls
 
@@ -56,7 +56,7 @@ Selling an escort sells its fitted parts with it, at the spare-part price.
 
 ### Selling spare parts
 
-On the **SELL** tab, press Enter twice on a spare (aboard or in this city's garage). A city pays half the list price, or 25 for starter gear. Debt is paid first.
+At the bottom of the **SHOP** tab, press Enter twice on a spare (aboard or in this city's garage). A city pays half the list price, or 25 for starter gear. Debt is paid first.
 
 ## Parts
 
@@ -169,10 +169,19 @@ Only the best fit person of each role counts in a vehicle.
 | Legend | 140 |
 
 - Wages build up while you drive. The reserve earns half. The Road Captain takes none.
-- Pay under **CREW → PAY WAGES** in a city, from carried credits first, then the bank. If you cannot pay everyone, those longest unpaid are paid first.
+- You are asked on arrival in a city; you can also pay later under **CREW → PAY WAGES**. Money comes from carried credits first, then the bank. If you cannot pay everyone, those longest unpaid are paid first.
 - A payday is missed when you leave a city still owing someone half a period's wage or more.
 - After one missed payday they give no bonus (they still run their vehicle). After two in a row they quit.
 - Removing someone from the crew cancels what they are owed.
+
+## Arriving at a city
+
+Before the city menu opens you decide, one at a time:
+
+1. **Particle X:** sell it all at this city's price, or keep it. This is the only place to sell it.
+2. **Payday:** pay the crew, or don't. The screen shows who is owed and who would quit.
+
+A step is skipped when there is nothing to sell or nobody to pay. Mines have no arrival screen.
 
 ## Cities
 
