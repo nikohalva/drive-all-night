@@ -198,6 +198,13 @@ test('filling a seat never strips another escort of its only fit hand', () => {
   expect(seatCandidate(spare, 9)).not.toBeNull();
 });
 
+test('someone can be taken off a vehicle into the reserve, if there is room there', () => {
+  const s = withCrew(newGame(1), person('driver', 1, 'lead'));
+  expect(ok(assignCrew(s, s.crew[0].id, null)).crew[0].post).toBeNull();
+  const full = withCrew(s, ...[0, 1, 2].map(() => person('driver', 1, null)));
+  expect(assignCrew(full, full.crew[0].id, null)).toEqual({ ok: false, reason: 'slot' });
+});
+
 test('you cannot assign someone to a full vehicle', () => {
   const s = withCrew(newGame(1), person('driver', 1, 'lead'), person('medic', 1, 'lead'), person('gunner', 1, null));
   expect(assignCrew(s, s.crew[2].id, 'lead')).toEqual({ ok: false, reason: 'slot' });

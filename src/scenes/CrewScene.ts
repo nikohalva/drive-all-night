@@ -58,6 +58,7 @@ export class CrewScene extends Phaser.Scene {
     for (const key of ['ENTER', 'SPACE']) kb?.on(`keydown-${key}`, () => this.reassign());
     for (const key of ['C', 'ESC']) kb?.on(`keydown-${key}`, () => this.close());
     kb?.on('keydown-X', () => this.dismiss());
+    kb?.on('keydown-R', () => this.unseat());
     this.events.once('shutdown', () => kb?.removeAllListeners());
     this.render();
   }
@@ -140,6 +141,26 @@ export class CrewScene extends Phaser.Scene {
     this.render();
   }
 
+  /** Take someone off their vehicle without letting them go. */
+  private unseat(): void {
+    const m = this.selected();
+    if (!m) return;
+    this.pending = null;
+    if (m.post === null) {
+      this.message = `${m.name} IS ALREADY IN THE RESERVE`;
+    } else {
+      const r = assignCrew(getState(), m.id, null);
+      if (r.ok) {
+        setState(r.state);
+        this.follow(m.id);
+        this.message = '';
+      } else {
+        this.message = 'THE RESERVE IS FULL. X REMOVES SOMEONE FROM THE CREW';
+      }
+    }
+    this.render();
+  }
+
   private dismiss(): void {
     const m = this.selected();
     if (!m) return;
@@ -175,7 +196,7 @@ export class CrewScene extends Phaser.Scene {
     };
 
     text('CREW', 8, 8, PAL.pink, 2);
-    text('UP/DOWN: PICK  ENTER: MOVE OR FILL SEAT  X: DISMISS  C: CLOSE', 60, 11, '#8a7aaa');
+    text('UP/DOWN: PICK  ENTER: MOVE/FILL  R: OFF VEHICLE  X: FIRE  C: CLOSE', 60, 11, '#8a7aaa');
 
     const rows = this.rows(s);
     const chosen = this.people(rows)[this.cursor];
@@ -232,6 +253,10 @@ export class CrewScene extends Phaser.Scene {
       y += 4;
       const effect = member.skill === 0 ? 'KEEPS THE VEHICLE ROLLING. NO BONUS' : ROLE_EFFECT[member.role];
       for (const part of wrap(effect, W - SIDE_X - 6)) line(part, '#8a7aaa');
+      y += 8;
+      line('ENTER: MOVE ELSEWHERE', PAL.cyanPale);
+      if (member.post !== null) line('R: TAKE OFF THE VEHICLE', PAL.cyanPale);
+      line('X TWICE: REMOVE FROM CREW', PAL.red);
     } else if (chosen && 'empty' in chosen) {
       const who = seatCandidate(s, chosen.empty);
       line('EMPTY SEAT', PAL.white);
