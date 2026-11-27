@@ -6,7 +6,7 @@ import { ROLE_EFFECT, ROLE_NAME, SKILL_NAME, TRAITS } from '../config/crew';
 import { escortDef } from '../config/escorts';
 import { VIEW } from '../config/view';
 import { getState, setState } from '../game/session';
-import { crewAt, dismissCrew, isFit, reassignCrew, seatsAt, type CrewMember, type Post } from '../sim/crew';
+import { assignCrew, crewAt, dismissCrew, isFit, reassignCrew, seatCandidate, seatsAt, type CrewMember, type Post } from '../sim/crew';
 import type { GameState } from '../sim/game-state';
 
 const W = VIEW.W;
@@ -19,7 +19,12 @@ const VISIBLE = 24;
 export const healthWord = (m: CrewMember): string =>
   m.health >= 100 ? 'FIT' : isFit(m) ? `HURT ${Math.floor(m.health)}%` : `DOWN ${Math.floor(m.health)}%`;
 
-type Row = { heading: string; warn: boolean } | { captain: true } | { member: CrewMember };
+type Row =
+  | { heading: string; warn: boolean }
+  | { captain: true }
+  | { member: CrewMember }
+  /** A vehicle's free seats: pick it to bring someone in. */
+  | { empty: Post };
 
 /** The crew roster, by vehicle. Opened with C on the road or from a city; the clock is stopped. */
 export class CrewScene extends Phaser.Scene {
@@ -66,6 +71,7 @@ export class CrewScene extends Phaser.Scene {
       rows.push({ heading: `${title}  ${count}${idle ? '  NOBODY FIT: IDLE' : ''}`, warn: idle });
       if (post === 'lead') rows.push({ captain: true });
       for (const member of people) rows.push({ member });
+      if (post !== null && people.length < seatsAt(s, post)) rows.push({ empty: post });
     };
     group('lead', 'YOUR RIG');
     for (const e of s.caravan) group(e.id, escortDef(e.kind, e.tier).name);
@@ -73,7 +79,7 @@ export class CrewScene extends Phaser.Scene {
     return rows;
   }
 
-  /** Rows that can be selected: the captain and every hired hand. */
+  /** Rows that can be selected: the captain, every hired hand and free seats. */
   private people(rows: Row[]): Row[] {
     return rows.filter((r) => !('heading' in r));
   }
@@ -97,7 +103,29 @@ export class CrewScene extends Phaser.Scene {
     if (at >= 0) this.cursor = at;
   }
 
+  private fill(post: Post): void {
+    const s = getState();
+    const who = seatCandidate(s, post);
+    if (!who) {
+      this.message = 'NOBODY TO SPARE. HIRE CREW IN A CITY';
+      return;
+    }
+    const r = assignCrew(s, who.id, post);
+    if (r.ok) {
+      setState(r.state);
+      this.follow(who.id);
+      this.message = '';
+    }
+  }
+
   private reassign(): void {
+    const row = this.people(this.rows(getState()))[this.cursor];
+    if (row && 'empty' in row) {
+      this.pending = null;
+      this.fill(row.empty);
+      this.render();
+      return;
+    }
     const m = this.selected();
     if (!m) return;
     this.pending = null;
@@ -147,7 +175,7 @@ export class CrewScene extends Phaser.Scene {
     };
 
     text('CREW', 8, 8, PAL.pink, 2);
-    text('UP/DOWN: PICK  ENTER: MOVE  X: DISMISS  C: CLOSE', 60, 11, '#8a7aaa');
+    text('UP/DOWN: PICK  ENTER: MOVE OR FILL SEAT  X: DISMISS  C: CLOSE', 60, 11, '#8a7aaa');
 
     const rows = this.rows(s);
     const chosen = this.people(rows)[this.cursor];
@@ -161,6 +189,8 @@ export class CrewScene extends Phaser.Scene {
       }
       if ('heading' in row) {
         text(row.heading, 8, y, row.warn ? PAL.red : PAL.amber);
+      } else if ('empty' in row) {
+        text('+ EMPTY SEAT', 20, y, '#7a6a9a');
       } else if ('captain' in row) {
         text('YOU', 20, y, PAL.cyan);
         text('ROAD CAPTAIN', 130, y, PAL.cyan);
@@ -182,7 +212,12 @@ export class CrewScene extends Phaser.Scene {
     ctx.fillStyle = PAL.pink;
     ctx.fillRect(px - 2, 28, size + 4, size + 4);
     const member = chosen && 'member' in chosen ? chosen.member : null;
-    ctx.drawImage(member ? portrait(member.face, member.role) : portrait(s.seed, 'captain'), px, 30, size, size);
+    if (member) ctx.drawImage(portrait(member.face, member.role), px, 30, size, size);
+    else if (chosen && 'captain' in chosen) ctx.drawImage(portrait(s.seed, 'captain'), px, 30, size, size);
+    else {
+      ctx.fillStyle = '#140726';
+      ctx.fillRect(px, 30, size, size);
+    }
     let y = 38 + size;
     const line = (str: string, color: string): void => {
       text(str, SIDE_X, y, color);
@@ -197,6 +232,11 @@ export class CrewScene extends Phaser.Scene {
       y += 4;
       const effect = member.skill === 0 ? 'KEEPS THE VEHICLE ROLLING. NO BONUS' : ROLE_EFFECT[member.role];
       for (const part of wrap(effect, W - SIDE_X - 6)) line(part, '#8a7aaa');
+    } else if (chosen && 'empty' in chosen) {
+      const who = seatCandidate(s, chosen.empty);
+      line('EMPTY SEAT', PAL.white);
+      const hint = who ? `ENTER: BRING ${who.name} HERE` : 'NOBODY TO SPARE. HIRE CREW IN A CITY';
+      for (const part of wrap(hint, W - SIDE_X - 6)) line(part, PAL.amber);
     } else {
       line('YOU', PAL.white);
       line('ROAD CAPTAIN', PAL.cyan);

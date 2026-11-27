@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.5.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.5.1-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Controls
 
@@ -118,6 +118,7 @@ Only the best fit person of each role counts in a vehicle.
 | Dreamer, Grump, Joker | colour only |
 
 - **Seats:** your rig has 2 / 4 / 5 by hull; an escort has its MK number plus one; the reserve holds 3.
+- **Filling a seat:** press C, pick a vehicle's empty seat and press Enter. New hires go first to a vehicle nobody is running.
 - **Escorts need someone fit aboard**, or they are towed: no guns, sweeping or scouting.
 - **Health:** 0-100. Below 40 a person cannot work.
 - **Wounds** come from battle damage; a wrecked vehicle is very dangerous.
