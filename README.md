@@ -18,6 +18,7 @@ A new feature raises the middle number, a fix or small addition the last one.
 - Fix: free seats can be picked in the crew screen to bring someone in
 - Fix: new hires and survivors go first to a vehicle nobody is running
 - R in the crew screen takes someone off their vehicle; X pressed twice removes them from the crew
+- The version number is at the top right, on the title screen and while driving
 
 ### 0.5.0-alpha (2026-11-28)
 
