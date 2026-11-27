@@ -174,6 +174,18 @@ export function rookie(seed: number, id: number, kind: EscortKind, escortId: num
   return { id, ...person(rng), role: ROOKIE_ROLE[kind], skill: 0, health: 100, post: escortId };
 }
 
+/** Someone pulled out of a wreck. Null when there is no seat for them. */
+export function addSurvivor(s: GameState, seed: number): { state: GameState; member: CrewMember } | null {
+  const post = (['lead', ...s.caravan.map((e) => e.id), null] as Post[]).find((p) => hasRoom(s, p));
+  if (post === undefined) return null;
+  const rng = makeRng(seed);
+  const skill: Skill = rng() < 0.8 ? 1 : 2;
+  const role = pick(rng, CREW_ROLES);
+  // they come out of it hurt
+  const member: CrewMember = { id: s.nextCrewId, ...person(rng), role, skill, health: 60, post };
+  return { state: { ...s, crew: [...s.crew, member], nextCrewId: s.nextCrewId + 1 }, member };
+}
+
 /** Who is looking for work in this city right now. */
 export function recruitPool(s: GameState, city: CityDef): Recruit[] {
   const epoch = Math.floor(s.t / CREW.RECRUIT_SECONDS);

@@ -20,7 +20,7 @@ function ok(r: { ok: boolean; state?: GameState }): GameState {
 
 test('new game starts at dusk beside the city, facing the sunset, with no progress', () => {
   const s = newGame(7);
-  expect(s).toMatchObject({ version: 6, seed: 7, t: 0, credits: 0, debt: 0 });
+  expect(s).toMatchObject({ version: 7, seed: 7, t: 0, credits: 0, debt: 0 });
   expect(s.player.x).toBe(cityPosition(0).x + 40);
   expect(s.player.y).toBe(cityPosition(0).y);
   expect(s.player.heading).toBeCloseTo(-Math.PI / 2);

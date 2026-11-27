@@ -38,9 +38,11 @@ export interface UiInfo {
   nearMine: string | null;
   /** At a mine entrance that is sealed for the day. */
   mineSealed: boolean;
+  /** Beside a wreck that has not been searched. */
+  nearWreck: boolean;
   /** A short notice at the top of the screen, shown until `toastUntil` (game time, ms). */
   toast: string | null;
   toastUntil: number;
 }
 
-export const ui: UiInfo = { nearDock: false, dockName: null, scorching: false, broken: false, fuelHint: false, message: null, nearMine: null, mineSealed: false, toast: null, toastUntil: 0 };
+export const ui: UiInfo = { nearDock: false, dockName: null, scorching: false, broken: false, fuelHint: false, message: null, nearMine: null, mineSealed: false, nearWreck: false, toast: null, toastUntil: 0 };

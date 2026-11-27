@@ -13,6 +13,13 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.5.0-alpha (2026-11-28)
+
+- Desert scenery: bones, fused glass, fallen pylons, rock spires, craters and old tracks
+- Wrecks with an amber beacon: search them for fuel or Particle X, spare parts and sometimes a survivor
+- Spotted wrecks are marked on the map
+- Older saves are upgraded automatically
+
 ### 0.4.2-alpha (2026-11-27)
 
 - The shop is split into sections: rigs, engines, tanks, collectors, cargo holds, armor, weapons and supplies

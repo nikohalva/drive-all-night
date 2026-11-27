@@ -59,6 +59,8 @@ import {
   robberChancePerSecond,
 } from '../sim/raids';
 import type { Rng } from '../sim/rng';
+import { discoverWrecks, searchWreck, wreckInReach } from '../sim/desert';
+import { DesertLayer } from './drive/desert-layer';
 import { GroundLayer } from './drive/ground';
 import { Lighting, RIG_SCREEN_X, RIG_SCREEN_Y } from './drive/lighting';
 import { ParticleLayer } from './drive/particles-layer';
@@ -77,6 +79,7 @@ const CONVOY_SPACING = 34;
 export class DriveScene extends Phaser.Scene {
   private ground!: GroundLayer;
   private sparks!: ParticleLayer;
+  private desert!: DesertLayer;
   private lighting!: Lighting;
   private pirates!: PiratesMap;
   private rescue!: RescueFlow;
@@ -135,6 +138,7 @@ export class DriveScene extends Phaser.Scene {
     this.ground = new GroundLayer(this, s.seed);
     this.ground.prime(Math.round(this.k.x - RIG_SCREEN_X), Math.round(this.k.y - RIG_SCREEN_Y));
     this.sparks = new ParticleLayer(this, s.seed);
+    this.desert = new DesertLayer(this, s.seed);
     this.cities = new Map();
     for (const c of CITIES) {
       const img = this.add.image(0, 0, ensureCityTexture(this)).setOrigin(1, CITY_DOCK_Y / CITY_H).setDepth(3);
@@ -278,6 +282,9 @@ export class DriveScene extends Phaser.Scene {
       }
     }
 
+    setState(discoverWrecks(getState(), nk.x, nk.y, caravan.sight));
+    const wreck = wreckInReach(getState(), nk.x, nk.y);
+
     const zone = zoneAt(nk.y, tNew);
     const dock = cities.find((c) => Math.hypot(nk.x - c.x, nk.y - c.y) <= BALANCE.DOCK_RADIUS);
     this.dockCity = dock ? dock.id : null;
@@ -293,11 +300,20 @@ export class DriveScene extends Phaser.Scene {
     this.dockMine = mineOpen ? near.mine.id : null;
     ui.nearMine = mineOpen ? near.mine.baron : null;
     ui.mineSealed = atMine && !mineOpen;
+    ui.nearWreck = !!wreck && !ui.nearDock && !this.dockMine;
     if (zone === 'dawn' && !this.frozen) this.handleDestroyed('dawn');
 
     const dockPressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
     if (dockPressed && ui.nearDock && !this.frozen && !this.destroyedPending) this.enterCity();
     else if (dockPressed && this.dockMine && !this.frozen && !this.destroyedPending) this.enterMine();
+    else if (dockPressed && wreck && !this.frozen && !this.destroyedPending) {
+      const found = searchWreck(getState(), wreck.id);
+      setState(found.state);
+      // a search can refill a dry tank or fill the hold: keep this frame's vehicle in step
+      vehicle = found.state.vehicle;
+      ui.toast = found.report.join('. ');
+      ui.toastUntil = time + 5000;
+    }
     const mapPressed = Phaser.Input.Keyboard.JustDown(this.keys.M);
     if (mapPressed && !this.frozen && !this.destroyedPending && this.time.now >= this.mapReopenAt) this.openMap();
     const crewPressed = Phaser.Input.Keyboard.JustDown(this.keys.C);
@@ -385,6 +401,7 @@ export class DriveScene extends Phaser.Scene {
 
     this.ground.update(scrollX, scrollY);
     this.sparks.update(scrollX, scrollY, t, time);
+    this.desert.update(scrollX, scrollY, time, getState().wrecks.searched);
     this.lighting.update({
       t,
       playerY: k.y,

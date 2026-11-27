@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.4.2-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.5.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Controls
 
@@ -8,7 +8,7 @@ Components, upgrades and rules as of **0.4.2-alpha**. The numbers live in `src/c
 |---|---|
 | W A S D / arrows | drive |
 | F | move cargo into the fuel tank |
-| E | dock at a city or enter a mine |
+| E | dock at a city, enter a mine or search a wreck |
 | H | call for help when broken down |
 | M | world map (Z zooms) |
 | C | crew |
@@ -150,6 +150,32 @@ Deposit and withdraw in any city (all or 500 at a time). Mines are not part of t
 - Each beaten enemy: 25% chance of a spare part (tier 2; sometimes tier 3 from level 8).
 - Each won fight: 6% plus 0.5% per enemy level to capture a vehicle (MK1, or MK2 from level 8). It arrives with 30% hull and no crew.
 - Anything you have no room for is left behind.
+
+## The desert
+
+### Scenery
+Only to look at: dim and flat, with no lights, no prompt and no map mark. You drive straight over it.
+
+| Scenery | Looks like |
+|---|---|
+| Bones | the spine and ribs of something long dead |
+| Fused glass | melted sand with small crystals |
+| Fallen pylon | a toppled lattice mast |
+| Rock spire | a needle of rock with a long shadow |
+| Crater | an old impact ring |
+| Tracks | tyre marks of caravans gone by |
+
+### Wrecks
+A broken hauler with a pulsing amber beacon. Drive up and press **E** to search it. Each wreck can be searched once; afterwards it goes dark. Wrecks your caravan has seen are marked with an amber cross on the map until searched.
+
+| What you can find | Chance | Amount |
+|---|---|---|
+| Fuel | 70% | 8-28, into the tank |
+| Particle X (when there is no fuel) | 30% | 5-25, into the hold |
+| Spare part | 45% | tier 2, sometimes tier 3 |
+| Survivor | 15% | joins your crew: Able or Seasoned, hurt (60 health) |
+
+What does not fit (full tank or hold, no spare room, no free seat) is lost with the search.
 
 ## Night barons
 
