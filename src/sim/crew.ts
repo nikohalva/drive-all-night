@@ -20,7 +20,8 @@ import {
   type Skill,
   type TraitId,
 } from '../config/crew';
-import { escortDef, type EscortKind } from '../config/escorts';
+import type { EscortKind } from '../config/escorts';
+import { escortStats } from './escort-stats';
 import type { TxResult } from './economy';
 import type { GameState } from './game-state';
 import { hash2, makeRng, type Rng } from './rng';
@@ -182,7 +183,7 @@ export function crewTime(s: GameState, dt: number): GameState {
     return Math.min(limit, hp + CREW.MECHANIC_REPAIR * skill * dt);
   };
   const vehicle = { ...s.vehicle, hp: patched('lead', s.vehicle.hp, vehicleStats(s.vehicle).maxHp) };
-  const caravan = s.caravan.map((e) => ({ ...e, hp: patched(e.id, e.hp, escortDef(e.kind, e.tier).hp) }));
+  const caravan = s.caravan.map((e) => ({ ...e, hp: patched(e.id, e.hp, escortStats(e).hp) }));
   return { ...s, crew, vehicle, caravan };
 }
 
@@ -202,7 +203,7 @@ export function applyInjuries(before: GameState, after: GameState, rng: Rng): { 
     const now = after.caravan.find((e) => e.id === post);
     if (!was || !now) return { share: 0, wrecked: false };
     const lost = was.hp - now.hp;
-    return { share: lost / escortDef(was.kind, was.tier).hp, wrecked: lost > 0 && now.hp <= 0 };
+    return { share: lost / escortStats(was).hp, wrecked: lost > 0 && now.hp <= 0 };
   };
 
   const medic = caravanBonus(before, 'medic');

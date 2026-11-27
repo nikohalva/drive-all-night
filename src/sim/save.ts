@@ -33,7 +33,12 @@ const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object
 const isNum = (x: unknown): boolean => typeof x === 'number' && Number.isFinite(x);
 
 const isEscort = (e: unknown): boolean =>
-  isObj(e) && isNum(e.id) && isNum(e.hp) && [1, 2, 3].includes(e.tier as number) && ESCORT_KINDS.includes(e.kind as never);
+  isObj(e) &&
+  isNum(e.id) &&
+  isNum(e.hp) &&
+  [1, 2, 3].includes(e.tier as number) &&
+  ESCORT_KINDS.includes(e.kind as never) &&
+  (e.fitted === undefined || (isObj(e.fitted) && Object.values(e.fitted).every((id) => typeof id === 'string')));
 
 function looksLikeGameState(x: unknown): x is GameState {
   if (!isObj(x) || x.version !== CURRENT_SAVE_VERSION) return false;

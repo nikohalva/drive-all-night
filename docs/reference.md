@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.7.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.8.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Controls
 
@@ -28,7 +28,35 @@ Every hull has one engine and one tank slot. Bigger hulls burn more fuel: 0.25, 
 ## Fitting (FIT tab)
 
 - Your rig's slots are listed with the parts that can go in each, aboard or in this city's garage. Pick one and press Enter. U removes the fitted part.
-- Escorts have built-in gear that cannot be changed. The tab lists them, in the caravan or parked, with their stats.
+- Caravan vehicles have upgrade slots (below). Parked vehicles must be taken out of the garage before fitting.
+
+### Escort upgrade slots
+
+Every escort has an engine and an armour slot, plus:
+
+| Escort | Extra slots |
+|---|---|
+| Dust Sweeper | collector, cargo |
+| Lance Gunship, Bulwark, Night Fox | weapon |
+| Fuel Hauler | tank |
+| Patch Rig | cargo |
+
+Parts add to the built-in gear:
+
+| Part | What it adds to an escort (tier 1 / 2 / 3) |
+|---|---|
+| Engine | speed +0 / 13 / 25 |
+| Armor | armor +1 / 3 / 6, hull +0 / 20 / 50 (repair to fill it) |
+| Weapon | a second gun with the part's damage and accuracy |
+| Collector | sweep +4 / 6 / 9 |
+| Cargo | hold +30 / 70 / 150 |
+| Tank | tank +20 / 40 / 70 |
+
+Selling an escort sells its fitted parts with it, at the spare-part price.
+
+### Selling spare parts
+
+On the **SELL** tab, press Enter twice on a spare (aboard or in this city's garage). A city pays half the list price, or 25 for starter gear. Debt is paid first.
 
 ## Parts
 
