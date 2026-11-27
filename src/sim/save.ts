@@ -1,13 +1,14 @@
 import { HULLS, SLOT_TYPES } from '../config/catalog';
 import { ESCORT_KINDS } from '../config/escorts';
 import { CREW_ROLES, TRAIT_IDS } from '../config/crew';
+import { HOME_GARAGE } from '../config/holdings';
 import type { EscortKind } from '../config/escorts';
 import { rookie } from './crew';
 import type { GameState } from './game-state';
 
 export const SAVE_KEY = 'drive-all-night/save-v1';
 /** The save format this build writes; older formats are upgraded on load. */
-export const CURRENT_SAVE_VERSION = 5;
+export const CURRENT_SAVE_VERSION = 6;
 
 export interface KV {
   getItem(k: string): string | null;
@@ -31,6 +32,9 @@ export function serialize(s: GameState): string {
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 const isNum = (x: unknown): boolean => typeof x === 'number' && Number.isFinite(x);
 
+const isEscort = (e: unknown): boolean =>
+  isObj(e) && isNum(e.id) && isNum(e.hp) && [1, 2, 3].includes(e.tier as number) && ESCORT_KINDS.includes(e.kind as never);
+
 function looksLikeGameState(x: unknown): x is GameState {
   if (!isObj(x) || x.version !== CURRENT_SAVE_VERSION) return false;
   if (!Array.isArray(x.known) || !x.known.every((id) => typeof id === 'string')) return false;
@@ -39,16 +43,19 @@ function looksLikeGameState(x: unknown): x is GameState {
   for (const r of Object.values(x.barons)) {
     if (!isObj(r) || !isNum(r.standing) || typeof r.allied !== 'boolean') return false;
   }
-  for (const e of x.caravan) {
-    if (!isObj(e) || !isNum(e.id) || !isNum(e.hp) || ![1, 2, 3].includes(e.tier as number)) return false;
-    if (!ESCORT_KINDS.includes(e.kind as never)) return false;
-  }
+  if (!x.caravan.every(isEscort)) return false;
   if (!isNum(x.nextCrewId) || !Array.isArray(x.crew) || !Array.isArray(x.hired)) return false;
   for (const m of x.crew) {
     if (!isObj(m) || !isNum(m.id) || !isNum(m.health) || !isNum(m.face) || typeof m.name !== 'string') return false;
     if (!CREW_ROLES.includes(m.role as never) || !TRAIT_IDS.includes(m.trait as never)) return false;
     if (![0, 1, 2, 3].includes(m.skill as number)) return false;
     if (m.post !== null && m.post !== 'lead' && !isNum(m.post)) return false;
+  }
+  if (!isNum(x.bank) || !isObj(x.garages)) return false;
+  for (const g of Object.values(x.garages)) {
+    if (!isObj(g) || typeof g.owned !== 'boolean' || !isNum(g.rentUntil)) return false;
+    if (!Array.isArray(g.parts) || !g.parts.every((id) => typeof id === 'string')) return false;
+    if (!Array.isArray(g.vehicles) || !g.vehicles.every(isEscort)) return false;
   }
   if (!isNum(x.seed) || !isNum(x.t) || !isNum(x.credits) || !isNum(x.debt)) return false;
 
@@ -84,6 +91,10 @@ function upgrade(x: unknown): unknown {
       .filter((e) => ESCORT_KINDS.includes(e.kind as never))
       .map((e, i) => rookie(Number(v.seed), i + 1, e.kind as EscortKind, Number(e.id)));
     v = { ...v, version: 5, crew, nextCrewId: crew.length + 1, hired: [] };
+  }
+  if (v.version === 5) {
+    const home = { owned: true, rentUntil: 0, parts: [], vehicles: [] };
+    v = { ...v, version: 6, bank: 0, garages: { [HOME_GARAGE]: home } };
   }
   return v;
 }

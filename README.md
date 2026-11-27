@@ -13,6 +13,16 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.4.0-alpha (2026-11-27)
+
+- Bank: deposit and withdraw in any city. Banked credits are safe.
+- Losing a fight now costs the credits you carry as well as your cargo
+- Garages: you start with one in Dusk Citadel and can buy or rent others. Park vehicles and store spare parts.
+- The rig carries a limited number of spare parts
+- Salvage: a won fight can leave spare parts, or even a battered vehicle
+- The old GARAGE tab, where parts are fitted, is now FIT
+- Older saves are upgraded automatically
+
 ### 0.3.0-alpha (2026-11-25)
 
 - Crew: driver, mechanic, gunner, comms and navigation, and medic, each with a name, a trait and a portrait. You are the Road Captain.

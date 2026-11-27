@@ -1,6 +1,7 @@
 import { HULLS, PARTS, REPAIR_KIT, SLOT_TYPES, type HullId, type SlotType } from '../config/catalog';
 import { CITY_BY_ID, START_CITY, cityPrice, type CityDef } from '../config/cities';
 import { caravanStats } from './caravan';
+import { hasGarage, spareRoom, stash } from './garage';
 import type { GameState } from './game-state';
 import { vehicleStats, type VehicleState } from './vehicle';
 
@@ -39,10 +40,10 @@ export function buyPart(s: GameState, partId: string, city: CityDef = HOME): TxR
   if (!part || !city.stock.includes(partId)) return fail('nothing');
   const price = cityPrice(part.price, city);
   if (s.credits < price) return fail('credits');
-  return done({
-    ...withVehicle(s, { owned: [...s.vehicle.owned, partId] }),
-    credits: s.credits - price,
-  });
+  const paid = { ...s, credits: s.credits - price };
+  if (spareRoom(s) > 0) return done(withVehicle(paid, { owned: [...s.vehicle.owned, partId] }));
+  // no room aboard: it is delivered to your garage here, if you have one
+  return hasGarage(s, city.id) ? done(stash(paid, city.id, partId)) : fail('slot');
 }
 
 /** Fit an owned part into a slot, returning whatever was there to the garage. */
@@ -63,7 +64,7 @@ export function fitPart(s: GameState, partId: string, slot: SlotType, index: num
   return done(withVehicle(s, { owned, fitted: { ...s.vehicle.fitted, [slot]: slotParts } }));
 }
 
-export function unfitPart(s: GameState, slot: SlotType, index: number): TxResult {
+export function unfitPart(s: GameState, slot: SlotType, index: number, city: CityDef = HOME): TxResult {
   const previous = s.vehicle.fitted[slot][index];
   if (!previous) return fail('nothing');
   // a rig with no engine cannot move and one with no tank cannot run: neither can be rescued from the map
@@ -72,12 +73,9 @@ export function unfitPart(s: GameState, slot: SlotType, index: number): TxResult
   }
   const slotParts = [...s.vehicle.fitted[slot]];
   slotParts[index] = null;
-  return done(
-    withVehicle(s, {
-      owned: [...s.vehicle.owned, previous],
-      fitted: { ...s.vehicle.fitted, [slot]: slotParts },
-    }),
-  );
+  const removed = withVehicle(s, { fitted: { ...s.vehicle.fitted, [slot]: slotParts } });
+  if (spareRoom(s) > 0) return done(withVehicle(removed, { owned: [...s.vehicle.owned, previous] }));
+  return hasGarage(s, city.id) ? done(stash(removed, city.id, previous)) : fail('slot');
 }
 
 /** Buy a bigger hull. Fitted parts carry over; buying the largest hull wins. */

@@ -40,6 +40,7 @@ const REASONS: Record<string, string> = {
   credits: 'NOT ENOUGH CREDITS',
   nothing: 'NOTHING TO GIVE',
   refused: 'THE BARON REFUSES',
+  slot: 'NO ROOM FOR MORE SPARES',
 };
 
 interface Row {
