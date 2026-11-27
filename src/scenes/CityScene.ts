@@ -6,7 +6,7 @@ import { BANK_STEP, GARAGE_PRICE, GARAGE_RENT, GARAGE_VEHICLES, RENT_SECONDS, SP
 import { PARTS } from '../config/catalog';
 import { asOnePurse, deposit, funds, payInCity, withdraw } from '../sim/bank';
 import { buyGarage, garageAt, hasGarage, parkEscort, rentGarage, storePart, takeEscort, takePart } from '../sim/garage';
-import { hireCrew, payWages, recruitPool, settlePayday, treatCrew, treatmentCost, wagesDue } from '../sim/crew';
+import { crewAt, hireCrew, isCrewed, payWages, recruitPool, settlePayday, treatCrew, treatmentCost, wagesDue } from '../sim/crew';
 import { PAL } from '../art/palette';
 import { rigSignature } from '../art/painters';
 import { ensureRigTextures } from '../art/textures';
@@ -25,9 +25,9 @@ import {
 import type { GameState } from '../sim/game-state';
 import { hash2 } from '../sim/rng';
 import { saveGame } from '../sim/save';
-import { compatibleOwned, cycleFit, garageRows, shopRows, shopSection } from '../sim/shop';
+import { cycleFit, fitChoice, fitRows, shopRows, shopSection } from '../sim/shop';
 import { vehicleStats } from '../sim/vehicle';
-import { CITY_BY_ID, START_CITY, type CityDef, type CityId } from '../config/cities';
+import { CITIES, CITY_BY_ID, START_CITY, type CityDef, type CityId } from '../config/cities';
 import { cityPos, nearestCopy } from '../sim/world';
 import type { HullId } from '../config/catalog';
 import { CARAVAN_CAP, ESCORT_RESALE, ESCORT_ROLE, escortDef, type EscortKind, type Tier } from '../config/escorts';
@@ -199,6 +199,56 @@ export class CityScene extends Phaser.Scene {
     return false;
   }
 
+  /** Your rig's slots and the spares for them, then every other vehicle you have and where it is. */
+  private fitList(s: GameState): Row[] {
+    const rig = `YOUR RIG - ${s.vehicle.hullId.toUpperCase()} (IN USE)`;
+    const rows: Row[] = fitRows(s, this.city.id).map((r): Row =>
+      r.type === 'slot'
+        ? {
+            section: rig,
+            text: r.label,
+            right: r.summary,
+            color: r.partId ? PAL.white : '#7a6a9a',
+            detail: 'PICK A PART BELOW TO FIT IT.  U: REMOVE THIS ONE',
+          }
+        : {
+            section: rig,
+            text: `   ${r.label}  (${r.from === 'aboard' ? 'ABOARD' : 'IN GARAGE'})`,
+            right: r.delta,
+            color: PAL.amber,
+            detail: r.summary,
+          },
+    );
+    const vehicle = (section: string, kind: EscortKind, tier: Tier, hp: number, note: string): Row => {
+      const def = escortDef(kind, tier);
+      const stats = [
+        def.damage ? `DMG ${def.damage}` : '',
+        def.collectRadius ? `SWEEP ${def.collectRadius}` : '',
+        def.cargoCap ? `HOLD ${def.cargoCap}` : '',
+        def.tankCap ? `TANK ${def.tankCap}` : '',
+        def.heal ? `HEAL ${def.heal}` : '',
+        `ARM ${def.armor}`,
+        `SPD ${def.speed}`,
+      ].filter(Boolean);
+      return {
+        section,
+        text: `${def.name}  HP ${Math.ceil(hp)}/${def.hp}  ${note}`,
+        color: hp <= 0 ? PAL.red : PAL.cyanPale,
+        detail: `BUILT-IN GEAR: ${stats.join(' ')}`,
+      };
+    };
+    for (const e of s.caravan) {
+      const note = e.hp <= 0 ? 'WRECKED' : isCrewed(s, e.id) ? `CREW ${crewAt(s, e.id).length}` : 'NO CREW';
+      rows.push(vehicle('CARAVAN (IN USE)', e.kind, e.tier, e.hp, note));
+    }
+    for (const city of CITIES) {
+      for (const e of s.garages[city.id]?.vehicles ?? []) {
+        rows.push(vehicle(`PARKED AT ${city.name}`, e.kind, e.tier, e.hp, 'NOT IN USE'));
+      }
+    }
+    return rows;
+  }
+
   private garageEntries(s: GameState): GarageEntry[] {
     const g = garageAt(s, this.city.id);
     const entries: GarageEntry[] = [];
@@ -324,14 +374,15 @@ export class CityScene extends Phaser.Scene {
         break;
       }
       case 'FIT': {
-        const row = garageRows(s)[cursor];
-        if (!row) break;
-        const spare = compatibleOwned(s, row.slot);
-        if (spare.length === 0) {
-          this.say('NO SPARE PARTS FOR THAT SLOT. BUY SOME IN THE SHOP', false);
-          break;
+        const row = fitRows(s, this.city.id)[cursor];
+        if (!row) break; // the rows after the rig's slots only list your vehicles
+        if (row.type === 'option') {
+          this.apply(fitChoice(s, this.city.id, row.slot, row.index, row.partId, row.from), 'FITTED');
+        } else if (s.vehicle.owned.some((id) => PARTS[id]?.slot === row.slot)) {
+          this.apply(cycleFit(s, row.slot, row.index), 'FITTED');
+        } else {
+          this.say('NOTHING ABOARD FOR THAT SLOT', false);
         }
-        this.apply(cycleFit(s, row.slot, row.index), 'FITTED');
         break;
       }
       case 'CARAVAN':
@@ -377,7 +428,7 @@ export class CityScene extends Phaser.Scene {
 
   private unfit(): void {
     if (this.locked || this.current() !== 'FIT') return;
-    const row = garageRows(getState())[this.cursors[this.tab]];
+    const row = fitRows(getState(), this.city.id)[this.cursors[this.tab]];
     if (row) this.apply(unfitPart(getState(), row.slot, row.index, this.city), 'PART REMOVED');
   }
 
@@ -435,14 +486,7 @@ export class CityScene extends Phaser.Scene {
           detail: `${r.summary}   ${r.delta}`,
         }));
       case 'FIT':
-        return garageRows(s).map((r) => ({
-          text: r.label,
-          color: r.partId ? PAL.white : '#7a6a9a',
-          detail:
-            compatibleOwned(s, r.slot).length > 0
-              ? 'ENTER: FIT NEXT SPARE   U: REMOVE'
-              : 'NO SPARE PARTS. BUY SOME IN THE SHOP   U: REMOVE',
-        }));
+        return this.fitList(s);
       case 'GARAGE':
         return this.garageEntries(s).map((entry) => this.garageRow(s, entry));
       case 'BANK': {

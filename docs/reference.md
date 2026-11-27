@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.6.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.7.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Controls
 
@@ -24,6 +24,11 @@ Hulls are bought in any city. Buying the Juggernaut wins.
 | Juggernaut | 15000 | 300 | 3 | 3 | 2 / 2 | 6 | 5 |
 
 Every hull has one engine and one tank slot. Bigger hulls burn more fuel: 0.25, 0.5 and 0.75 per second.
+
+## Fitting (FIT tab)
+
+- Your rig's slots are listed with the parts that can go in each, aboard or in this city's garage. Pick one and press Enter. U removes the fitted part.
+- Escorts have built-in gear that cannot be changed. The tab lists them, in the caravan or parked, with their stats.
 
 ## Parts
 

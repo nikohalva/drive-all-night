@@ -13,6 +13,10 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.7.0-alpha (2026-11-28)
+
+- The FIT page shows your rig's slots with the spare parts that can go in each, from aboard or this city's garage, and lists your caravan and parked vehicles
+
 ### 0.6.0-alpha (2026-11-28)
 
 - Crew wages build up while you drive. Pay them in a city, or don't: unpaid crew give no bonus, and quit after a second missed payday.
