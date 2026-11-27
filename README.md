@@ -13,6 +13,11 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.10.0-alpha (2026-11-28)
+
+- Buying a bigger rig no longer loses the old one: it is parked with its parts, to drive again, take into the caravan or sell
+- The new rig arrives with basic gear, and the shop asks before you buy it
+
 ### 0.9.0-alpha (2026-11-28)
 
 - Docking opens an arrival screen: sell your Particle X or keep it, then pay the crew or not

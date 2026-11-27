@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { EscortKind, Tier } from '../config/escorts';
+import type { Escort } from '../sim/caravan';
 import type { VehicleState } from '../sim/vehicle';
 import { drawText, textWidth } from './font';
 import { PinnedLru } from './lru';
@@ -33,6 +34,12 @@ export function ensureRigTextures(scene: Phaser.Scene, v: VehicleState): string[
 /** Texture keys for an escort's three tread phases. */
 export function ensureEscortTextures(scene: Phaser.Scene, kind: EscortKind, tier: Tier): string[] {
   return PHASES.map((phase) => addOnce(scene, `escort-${kind}-${tier}-${phase}`, () => paintEscort(kind, tier, phase)));
+}
+
+/** Tread textures for anything in the caravan, old rigs included. */
+export function ensureCaravanTextures(scene: Phaser.Scene, e: Escort): string[] {
+  if (e.rig) return ensureRigTextures(scene, { ...e.rig, owned: [], hp: 0, fuel: 0, cargo: 0, repairKits: 0 });
+  return ensureEscortTextures(scene, e.kind as EscortKind, e.tier);
 }
 
 /** Texture for an enemy combatant by role (pirate, robber or baron clan) and level. */

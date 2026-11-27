@@ -3,6 +3,7 @@ import { CITY_BY_ID, START_CITY, type CityDef, type CityId } from '../config/cit
 import { SPARE_SLOTS } from '../config/holdings';
 import { garageAt, hasGarage, stash } from './garage';
 import { ESCORT_SLOTS } from '../config/outfit';
+import type { EscortKind } from '../config/escorts';
 import { escortBonus } from './escort-stats';
 import { cityPrice, fitPart, type TxResult } from './economy';
 import type { GameState } from './game-state';
@@ -244,9 +245,14 @@ export function fitChoice(
 export function escortFitRows(s: GameState, city: CityId, id: number): FitRow[] {
   const e = s.caravan.find((x) => x.id === id);
   if (!e) return [];
+  // an old rig has all the slots it had when you drove it
+  if (e.rig) {
+    const asLead = { ...s, vehicle: { ...s.vehicle, hullId: e.rig.hullId, fitted: e.rig.fitted } };
+    return fitRows(asLead, city).map((r) => ({ ...r, target: id }));
+  }
   const stored = hasGarage(s, city) ? garageAt(s, city).parts : [];
   const rows: FitRow[] = [];
-  for (const slot of ESCORT_SLOTS[e.kind]) {
+  for (const slot of ESCORT_SLOTS[e.kind as EscortKind]) {
     const partId = e.fitted?.[slot] ?? null;
     const current = partId ? PARTS[partId] : undefined;
     const name = current ? current.name.toUpperCase() : 'EMPTY';

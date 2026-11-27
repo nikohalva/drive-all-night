@@ -84,7 +84,8 @@ test('fit swaps parts and buying the juggernaut wins', () => {
   s = ok(buyHull(s, 'juggernaut'));
   expect(s.flags.won).toBe(true);
   expect(s.vehicle.fitted.weapon).toEqual(['weapon-1', null, null]);
-  expect(s.vehicle.fitted.engine).toEqual(['engine-2']);
+  expect(s.vehicle.fitted.engine).toEqual(['engine-1']);
+  expect(s.garages.citadel?.vehicles[0].rig?.fitted.engine).toEqual(['engine-2']); // left on the old rig
 });
 
 test('only the juggernaut wins, and you cannot buy a hull you have outgrown', () => {

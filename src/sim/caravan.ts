@@ -1,13 +1,11 @@
 import { CITY_BY_ID, START_CITY, cityPrice, type CityDef } from '../config/cities';
 import { CREW } from '../config/crew';
-import type { SlotType } from '../config/catalog';
-import { PART_RESALE, PART_SCRAP } from '../config/outfit';
-import { PARTS } from '../config/catalog';
-import { escortStats } from './escort-stats';
+import type { HullId, SlotType } from '../config/catalog';
+import type { VehicleState } from './vehicle';
+import { escortStats, vehicleResale } from './escort-stats';
 import {
   CARAVAN_CAP,
   ESCORT_FUEL_PER_SECOND,
-  ESCORT_RESALE,
   escortDef,
   type EscortKind,
   type Tier,
@@ -17,12 +15,23 @@ import type { TxResult } from './economy';
 import type { GameState } from './game-state';
 import { vehicleStats } from './vehicle';
 
+/** What can follow you: a bought escort, or one of your old rigs. */
+export type VehicleKind = EscortKind | 'rig';
+
+/** One of your old hulls, with the parts still bolted to it. */
+export interface RigBuild {
+  hullId: HullId;
+  fitted: VehicleState['fitted'];
+}
+
 /** One escort vehicle in the caravan. hp 0 means wrecked: towed along, doing nothing. */
 export interface Escort {
   id: number;
-  kind: EscortKind;
+  kind: VehicleKind;
   tier: Tier;
   hp: number;
+  /** Set when this is an old rig of yours. */
+  rig?: RigBuild;
   /** Upgrade parts bolted on, by slot. */
   fitted?: Partial<Record<SlotType, string>>;
 }
@@ -123,12 +132,7 @@ export function buyEscort(s: GameState, kind: EscortKind, tier: Tier, city: City
 export function sellEscort(s: GameState, id: number): TxResult {
   const e = s.caravan.find((x) => x.id === id);
   if (!e) return fail('nothing');
-  // whatever is bolted on goes with it
-  const parts = Object.values(e.fitted ?? {}).reduce((n, id) => {
-    const price = PARTS[id]?.price ?? 0;
-    return n + (price > 0 ? Math.floor(price * PART_RESALE) : PART_SCRAP);
-  }, 0);
-  const refund = Math.floor(escortDef(e.kind, e.tier).price * ESCORT_RESALE) + parts;
+  const refund = vehicleResale(e);
   const after: GameState = {
     ...s,
     credits: s.credits + refund,

@@ -65,7 +65,8 @@ export function seatsAt(s: GameState, post: Post): number {
   if (post === null) return RESERVE_SEATS[s.vehicle.hullId];
   if (post === 'lead') return LEAD_SEATS[s.vehicle.hullId];
   const e = s.caravan.find((x) => x.id === post);
-  return e ? escortSeats(e.tier) : 0;
+  if (!e) return 0;
+  return e.rig ? LEAD_SEATS[e.rig.hullId] : escortSeats(e.tier);
 }
 
 const hasRoom = (s: GameState, post: Post): boolean => crewAt(s, post).length < seatsAt(s, post);

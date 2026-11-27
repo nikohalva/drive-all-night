@@ -32,12 +32,18 @@ export function serialize(s: GameState): string {
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 const isNum = (x: unknown): boolean => typeof x === 'number' && Number.isFinite(x);
 
+const isRig = (r: unknown): boolean => {
+  if (!isObj(r) || typeof r.hullId !== 'string' || !(r.hullId in HULLS) || !isObj(r.fitted)) return false;
+  const fitted = r.fitted;
+  return SLOT_TYPES.every((slot) => Array.isArray(fitted[slot]));
+};
+
 const isEscort = (e: unknown): boolean =>
   isObj(e) &&
   isNum(e.id) &&
   isNum(e.hp) &&
   [1, 2, 3].includes(e.tier as number) &&
-  ESCORT_KINDS.includes(e.kind as never) &&
+  (e.kind === 'rig' ? isRig(e.rig) : ESCORT_KINDS.includes(e.kind as never)) &&
   (e.fitted === undefined || (isObj(e.fitted) && Object.values(e.fitted).every((id) => typeof id === 'string')));
 
 function looksLikeGameState(x: unknown): x is GameState {
