@@ -13,6 +13,12 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.12.0-alpha (2026-11-28)
+
+- Ambient synth music that changes with the title, story, road, cities and battles
+- Sound effects for menus, trading, fighting, harvesting, finds, docking and danger, and an engine hum
+- N switches between all sound, effects only and silence
+
 ### 0.11.1-alpha (2026-11-28)
 
 - The third story slide says it is your parents who seal you into the pod
