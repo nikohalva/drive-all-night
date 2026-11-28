@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.13.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.14.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Opening story
 
@@ -263,6 +263,14 @@ A broken hauler with a pulsing amber beacon. Drive up and press **E** to search 
 | Survivor | 15% | joins your crew: Able or Seasoned, hurt (60 health) |
 
 What does not fit (full tank or hold, no spare room, no free seat) is lost with the search.
+
+## City shuttle
+
+On the **SHUTTLE** tab in any city (Enter twice). The whole caravan is set down beside the other city's dock, with no raiders on the way; world time passes. Leaving counts as leaving the city, so unpaid wages count as a missed payday.
+
+- **Fare:** 150, plus 10 per 1000 px, plus 50 per caravan vehicle, rounded to 10. For a lone rig that is about 250 from Ember Spire to Dusk Citadel.
+- **Time:** under two minutes of world time.
+- Paid from carried credits first, then the bank.
 
 ## Night barons
 

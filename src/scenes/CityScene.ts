@@ -1,3 +1,5 @@
+import { rideShuttle, shuttleTrips } from '../sim/shuttle';
+import { planetTimeLabel } from '../sim/clock';
 import { sound } from '../audio/engine';
 import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
@@ -39,7 +41,7 @@ import type { Escort } from '../sim/caravan';
 
 const W = VIEW.W;
 const H = VIEW.H;
-const TABS = ['SHOP', 'FIT', 'CARAVAN', 'CREW', 'GARAGE', 'BANK', 'SERVICES', 'SAVE', 'LEAVE'] as const;
+const TABS = ['SHOP', 'FIT', 'CARAVAN', 'CREW', 'GARAGE', 'BANK', 'SHUTTLE', 'SERVICES', 'SAVE', 'LEAVE'] as const;
 
 /** A spare part offered for sale on the SELL tab. */
 type SpareEntry = { part: string; from: PartSource };
@@ -212,6 +214,33 @@ export class CityScene extends Phaser.Scene {
     sound.play('deny');
     this.say(REASONS[result.reason] ?? 'NOT POSSIBLE', false);
     return false;
+  }
+
+  /** The first Enter asks, the second pays and carries the caravan to the other city. */
+  private takeShuttle(s: GameState, cursor: number): void {
+    const trip = shuttleTrips(s, this.city.id)[cursor];
+    if (!trip) return;
+    if (this.pendingPart !== cursor) {
+      this.pendingPart = cursor;
+      this.say(`PRESS ENTER AGAIN TO RIDE TO ${trip.name} FOR ${trip.fare} CR`, false);
+      return;
+    }
+    this.pendingPart = null;
+    // leaving is leaving: anyone unpaid has missed a payday
+    const payday = settlePayday(s);
+    const result = payInCity(payday.state, (p) => rideShuttle(p, this.city.id, trip.to));
+    if (!result.ok) {
+      this.apply(result, '');
+      return;
+    }
+    setState(result.state);
+    if (payday.report.length > 0) {
+      ui.toast = payday.report.slice(-3).join('. ');
+      ui.toastUntil = this.game.loop.time + 6000;
+    }
+    sound.play('dock');
+    this.scene.launch('arrival', { cityId: trip.to });
+    this.scene.stop();
   }
 
   /** Sell a spare from the shop list: the first Enter asks, the second sells. */
@@ -498,6 +527,9 @@ export class CityScene extends Phaser.Scene {
         if (recruit) this.apply(payInCity(s, (p) => hireCrew(p, this.city, recruit.key)), `${recruit.name} SIGNS ON`);
         break;
       }
+      case 'SHUTTLE':
+        this.takeShuttle(s, cursor);
+        return;
       case 'SERVICES':
         if (cursor === 2) this.apply(payInCity(s, treatCrew), 'CREW PATCHED UP');
         else if (cursor === 0) this.apply(payInCity(s, (p) => repairFull(p, this.city)), 'HULL REPAIRED');
@@ -653,6 +685,14 @@ export class CityScene extends Phaser.Scene {
             detail: `${ROLE_EFFECT[r.role]}. ${TRAITS[r.trait].name}. WAGE ${WAGE[r.skill]} PER ${PAY_PERIOD / 60} MIN`,
           })),
         ];
+      case 'SHUTTLE':
+        return shuttleTrips(s, this.city.id).map((trip) => ({
+          text: `RIDE TO ${trip.name}`,
+          right: `${trip.fare} CR   ${planetTimeLabel(trip.seconds)}`,
+          color: PAL.cyanPale,
+          dim: funds(s) < trip.fare,
+          detail: 'THE WHOLE CARAVAN, NO RAIDERS. ENTER TWICE',
+        }));
       case 'SERVICES': {
         const stats = vehicleStats(s.vehicle);
         const repairCost = Math.ceil((stats.maxHp - s.vehicle.hp) * this.city.repairPrice);
