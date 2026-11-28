@@ -2,6 +2,7 @@ import { BALANCE } from '../src/config/balance';
 import {
   GIVE_UP_DISTANCE,
   SPAWN_DISTANCE,
+  behindPoint,
   WARN_DISTANCE,
   groupCap,
   groupSpeed,
@@ -15,7 +16,7 @@ import {
 import { makePirateGroup } from '../src/sim/pirates';
 
 const player = { x: 2000, y: 50000 };
-const ctx: FleetContext = { zone: 'sunset', cargo: 0, strength: 8, easy: true, graceActive: false, helpless: false };
+const ctx: FleetContext = { zone: 'sunset', cargo: 0, strength: 8, easy: true, graceActive: false, helpless: false, heading: -Math.PI / 2, nearCity: false };
 const always = () => 0;
 const never = () => 0.999;
 
@@ -58,13 +59,28 @@ test('the group cap blocks spawns', () => {
   expect(maybeSpawnGroup(always, [group(), group({ id: 2 })], player, late, 3)).toBeNull();
 });
 
-test('a group appears about 220px toward the sunset and within 120px either side', () => {
-  const low = maybeSpawnGroup(always, [], player, ctx, 1);
-  expect(low?.y).toBe(player.y - SPAWN_DISTANCE);
-  expect(low?.x).toBe(player.x - 120);
-  const high = maybeSpawnGroup(() => 0.999, [], player, { ...ctx, zone: 'sunset', cargo: 1e9 }, 1);
-  expect(high?.x).toBeGreaterThan(player.x + 100);
-  expect(high?.x).toBeLessThanOrEqual(player.x + 120);
+test('raiders never appear ahead of you, whichever way you drive', () => {
+  for (const heading of [-Math.PI / 2, 0, Math.PI / 2, Math.PI, 0.7]) {
+    for (const roll of [0, 0.25, 0.5, 0.75, 0.999]) {
+      const p = behindPoint(player, heading, SPAWN_DISTANCE, () => roll);
+      const dx = p.x - player.x;
+      const dy = p.y - player.y;
+      expect(Math.hypot(dx, dy)).toBeCloseTo(SPAWN_DISTANCE);
+      // within 75 degrees of straight behind
+      const along = (dx * Math.cos(heading) + dy * Math.sin(heading)) / SPAWN_DISTANCE;
+      expect(along).toBeLessThanOrEqual(-Math.cos((75 * Math.PI) / 180) + 1e-9);
+    }
+  }
+});
+
+test('a new group starts behind you', () => {
+  // heading toward the sunset (-y), so behind is +y
+  const g = maybeSpawnGroup(always, [], player, ctx, 1);
+  expect(g!.y).toBeGreaterThan(player.y);
+});
+
+test('no pirates come close to a city', () => {
+  expect(maybeSpawnGroup(always, [], player, { ...ctx, nearCity: true }, 1)).toBeNull();
 });
 
 test('spawns are kept off the cliff walls', () => {

@@ -13,6 +13,11 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.13.1-alpha (2026-11-28)
+
+- Fix: raiders appear behind you, never in your path
+- Within reach of a city's guns no raiders come, and chasers break off
+
 ### 0.13.0-alpha (2026-11-28)
 
 - Shelter in neutral, friendly and allied mines, or in vacant mines, and wait for a city to roll by

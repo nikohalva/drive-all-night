@@ -27,11 +27,15 @@ export interface FleetContext {
   graceActive: boolean;
   /** The hull is at zero: nothing is left to fight with, so no new pirates come. */
   helpless: boolean;
+  /** Which way the rig points, in radians. */
+  heading: number;
+  /** Under a city's guns. */
+  nearCity: boolean;
 }
 
-/** Pirates appear this far toward the sunset from the player, spread this wide either side. */
-export const SPAWN_DISTANCE = 220;
-export const SPAWN_SPREAD = 120;
+/** Raiders appear this far off, within this angle of straight behind the rig. */
+export const SPAWN_DISTANCE = 360;
+const SPAWN_ARC = (75 * Math.PI) / 180;
 /** A warning shows once a group is this close. */
 export const WARN_DISTANCE = 160;
 /** A group that is left this far behind gives up the chase. */
@@ -40,6 +44,17 @@ export const GIVE_UP_DISTANCE = 600;
 const CHASE_SPEED_FRACTION = 0.8;
 /** Keep spawns clear of the cliff walls. */
 const WALL_MARGIN = 20;
+
+/** A point behind the rig: raiders chase, they never lie in wait in your path. */
+export function behindPoint(
+  player: { x: number; y: number },
+  heading: number,
+  distance: number,
+  rng: Rng,
+): { x: number; y: number } {
+  const angle = heading + Math.PI + (rng() * 2 - 1) * SPAWN_ARC;
+  return { x: player.x + Math.cos(angle) * distance, y: player.y + Math.sin(angle) * distance };
+}
 
 export const groupCap = (easy: boolean): number => (easy ? 1 : 2);
 
@@ -51,15 +66,16 @@ export function maybeSpawnGroup(
   ctx: FleetContext,
   id: number,
 ): PirateGroup | null {
-  if (ctx.graceActive || ctx.helpless || groups.length >= groupCap(ctx.easy)) return null;
+  if (ctx.graceActive || ctx.helpless || ctx.nearCity || groups.length >= groupCap(ctx.easy)) return null;
   if (rng() >= spawnChancePerSecond(ctx.zone, ctx.cargo, ctx.easy)) return null;
 
   const level = pirateLevel(ctx.strength, ctx.cargo, ctx.easy);
   const pirates = makePirateGroup(rng, level, ctx.easy);
   const lo = BALANCE.EDGE + WALL_MARGIN;
   const hi = BALANCE.WORLD_WIDTH - BALANCE.EDGE - WALL_MARGIN;
-  const x = Math.min(hi, Math.max(lo, player.x + (rng() * 2 - 1) * SPAWN_SPREAD));
-  return { id, x, y: player.y - SPAWN_DISTANCE, level, pirates, faction: 'pirates' };
+  const spot = behindPoint(player, ctx.heading, SPAWN_DISTANCE, rng);
+  const x = Math.min(hi, Math.max(lo, spot.x));
+  return { id, x, y: spot.y, level, pirates, faction: 'pirates' };
 }
 
 export const groupSpeed = (g: PirateGroup): number =>

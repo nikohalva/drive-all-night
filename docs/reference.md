@@ -289,6 +289,8 @@ Twelve mines, open only at night. A baron's temper sets the starting standing an
 
 ## Escaping
 
+- Raiders always appear behind you or off to the rear, never ahead.
+- Close to a city its guns keep raiders away: none appear, and chasers break off.
 - Raiders on the road give up after 12 seconds unless they are within a few lengths of you, or at once if you get far enough ahead.
 - **Turbo (X):** 60% more top speed for 3 seconds, for 3 fuel. Ready again 20 seconds after you lit it.
 - **Flee** in battle: your rig's order, 10-90% chance, better with speed and scouts.
