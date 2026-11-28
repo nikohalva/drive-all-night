@@ -1,3 +1,4 @@
+import { sound } from '../audio/engine';
 import Phaser from 'phaser';
 import { CITY_DOCK_Y, CITY_H, CITY_W, ESCORT_H, rigLayout, rigSignature } from '../art/painters';
 import { ensureCityTexture, ensureCaravanTextures, ensureMineTexture, ensureRigTextures } from '../art/textures';
@@ -223,6 +224,7 @@ export class DriveScene extends Phaser.Scene {
       this.odometer += forwardSpeed(this.k) * dt;
     }
     const nk = this.k;
+    sound.engine(this.frozen ? 0 : Math.abs(forwardSpeed(nk)) / Math.max(1, caravan.topSpeed));
     this.convoy.record(nk.x, nk.y);
     const leadLayout = rigLayout(prev.vehicle.hullId);
     this.escortSpots = new Map(
@@ -267,7 +269,10 @@ export class DriveScene extends Phaser.Scene {
       ];
       for (const sweep of sweeps) {
         const got = collect(prev.seed, getDepletion(), sweep.x, sweep.y, sweep.r, tNew);
-        if (got > 0) vehicle = addCargo(vehicle, got, caravan.cargoCap).v;
+        if (got > 0) {
+          vehicle = addCargo(vehicle, got, caravan.cargoCap).v;
+          sound.play('sparkle', 0.18);
+        }
       }
     }
     if (Math.floor(tNew) !== Math.floor(prev.t)) getDepletion().prune(tNew);
@@ -282,6 +287,7 @@ export class DriveScene extends Phaser.Scene {
     if (found.length > 0) {
       const now = getState();
       setState({ ...now, known: [...now.known, ...found] });
+      sound.play('find');
       const m = mineById(now.seed, found[0]);
       if (m) {
         ui.toast = `FOUND A MINE: ${m.baron} OF THE ${m.clan}`;
@@ -308,6 +314,7 @@ export class DriveScene extends Phaser.Scene {
     ui.nearMine = mineOpen ? near.mine.baron : null;
     ui.mineSealed = atMine && !mineOpen;
     ui.nearWreck = !!wreck && !ui.nearDock && !this.dockMine;
+    if (zone === 'scorch' && !this.frozen) sound.play('alarm', 1.6);
     if (zone === 'dawn' && !this.frozen) this.handleDestroyed('dawn');
 
     const dockPressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
@@ -319,6 +326,7 @@ export class DriveScene extends Phaser.Scene {
       // a search can refill a dry tank or fill the hold: keep this frame's vehicle in step
       vehicle = found.state.vehicle;
       ui.toast = found.report.join('. ');
+      sound.play('find');
       ui.toastUntil = time + 5000;
     }
     const mapPressed = Phaser.Input.Keyboard.JustDown(this.keys.M);
@@ -467,6 +475,7 @@ export class DriveScene extends Phaser.Scene {
 
   /** Raiders caught the rig: freeze the world and hand over to the turn-based fight. */
   private startBattle(group: PirateGroup): void {
+    sound.play('alarm');
     this.frozen = true;
     this.k = { ...this.k, vx: 0, vy: 0 };
     this.currentRaid = group;
@@ -494,6 +503,7 @@ export class DriveScene extends Phaser.Scene {
 
   /** Visit a night baron's hall; the clock stops while you are inside. */
   private enterMine(): void {
+    sound.play('dock');
     this.frozen = true;
     this.k = { ...this.k, vx: 0, vy: 0 };
     this.pirates.clear();
@@ -502,6 +512,7 @@ export class DriveScene extends Phaser.Scene {
 
   /** Dock with the city: freeze the world and open the city menu (which autosaves). */
   private enterCity(): void {
+    sound.play('dock');
     this.frozen = true;
     this.k = { ...this.k, vx: 0, vy: 0 };
     this.pirates.clear();
@@ -566,6 +577,7 @@ export class DriveScene extends Phaser.Scene {
   private handleDestroyed(reason: DestroyReason): void {
     if (this.destroyedPending) return;
     this.destroyedPending = true;
+    sound.play('boom');
     this.frozen = true;
     ui.message = reason === 'dawn' ? 'THE DAWN CAUGHT YOU' : 'BURNED BY THE SUN';
     this.time.delayedCall(2000, () => {

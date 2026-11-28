@@ -1,3 +1,4 @@
+import { sound } from '../audio/engine';
 import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
@@ -68,16 +69,19 @@ export class ArrivalScene extends Phaser.Scene {
       if (r.ok) {
         setState(r.state);
         this.note = `SOLD FOR ${value} CR`;
+        sound.play('coin');
       }
     } else if (this.choice === 0 && step === 'wages') {
       const r = payInCity(s, payWages);
       if (!r.ok) {
         this.note = 'YOU CANNOT AFFORD ANYONE. CHOOSE NOT TO PAY, OR SELL SOMETHING FIRST';
+        sound.play('deny');
         this.choice = 1;
         this.render();
         return;
       }
       setState(r.state);
+      sound.play('coin');
       const left = wagesDue(r.state);
       this.note = left > 0 ? `PAID WHAT YOU COULD. ${left} CR STILL OWED` : 'THE CREW IS PAID';
     }

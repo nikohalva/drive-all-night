@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.11.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.12.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Opening story
 
@@ -16,6 +16,21 @@ A new game starts with six story slides: Enter for the next, Left to go back, Es
 | H | call for help when broken down |
 | M | world map (Z zooms) |
 | C | crew |
+| N | sound: all, effects only, off |
+
+## Sound
+
+All music and effects are made in the browser; there are no audio files. Sound starts after your first key press, and your **N** choice is remembered.
+
+| Where | Music |
+|---|---|
+| Title screen | calm synthwave |
+| Story slides | slow, turning tense for the pirate and the pod |
+| Road | sparse, with an engine hum |
+| City and mine | warm |
+| Battle | fast |
+
+Effects: menu moves, buying and selling, refused actions, shots, hits, wrecks, repairs, victory and defeat, collecting Particle X, finds, docking, and an alarm for raiders and scorching sun.
 
 ## Rig hulls
 

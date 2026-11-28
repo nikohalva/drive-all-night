@@ -1,3 +1,4 @@
+import { sound } from '../audio/engine';
 import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
@@ -278,6 +279,11 @@ export class BattleScene extends Phaser.Scene {
 
   private feedback(before: BattleState, after: BattleState): void {
     let mineHurt = false;
+    const was = (uid: string): number => before.units.find((x) => x.uid === uid)?.hp ?? 0;
+    if (after.units.some((u) => u.hp < was(u.uid))) sound.play('shot');
+    if (after.units.some((u) => u.hp <= 0 && was(u.uid) > 0)) sound.play('boom');
+    else if (after.units.some((u) => u.side === 'player' && u.hp < was(u.uid))) sound.play('hit');
+    if (after.units.some((u) => u.hp > was(u.uid))) sound.play('repair');
     for (const u of after.units) {
       const prev = before.units.find((x) => x.uid === u.uid);
       const img = this.sprites.get(u.uid);
@@ -295,6 +301,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private finish(): void {
+    sound.play(this.battle.outcome === 'lost' ? 'lose' : 'win');
     const state = getState();
     const loot = this.battle.outcome === 'won' ? battleLoot(this.enemies0, this.rng) : { credits: 0, cargo: 0 };
     const hurt = applyInjuries(state, applyBattleResult(state, this.battle, loot), this.rng);

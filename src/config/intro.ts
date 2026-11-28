@@ -17,7 +17,7 @@ export const INTRO: readonly Slide[] = [
   },
   {
     art: 'pod',
-    lines: ['THEY SEALED YOU INTO THE ESCAPE POD.', 'THERE WAS ROOM FOR ONLY ONE.'],
+    lines: ['YOUR PARENTS SEALED YOU INTO THE ESCAPE POD.', 'THERE WAS ROOM FOR ONLY ONE.'],
   },
   {
     art: 'fall',

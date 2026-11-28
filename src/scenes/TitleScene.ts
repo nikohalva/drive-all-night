@@ -75,7 +75,7 @@ export class TitleScene extends Phaser.Scene {
     this.add.image(W - 6, 6, ensureLabel(this, VERSION_LABEL, '#c8b8e8')).setOrigin(1, 0).setDepth(10);
     label('UP/DOWN + ENTER', W / 2, H - 20, '#7a6a9a', 1);
     this.add
-      .image(W / 2, H - 10, ensureLabel(this, 'W/S/A/D OR ARROWS DRIVE   F FUEL   E DOCK   H HELP   C CREW', '#7a6a9a'))
+      .image(W / 2, H - 10, ensureLabel(this, 'W/S/A/D OR ARROWS DRIVE   F FUEL   E DOCK   H HELP   C CREW   N SOUND', '#7a6a9a'))
       .setOrigin(0.5, 0)
       .setDepth(10);
 

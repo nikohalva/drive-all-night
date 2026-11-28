@@ -1,3 +1,4 @@
+import { sound } from '../audio/engine';
 import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PAL } from '../art/palette';
@@ -114,6 +115,7 @@ export class BaronScene extends Phaser.Scene {
   }
 
   private apply(r: TxResult, done: string): void {
+    sound.play(r.ok ? 'coin' : 'deny');
     if (r.ok) {
       setState(r.state);
       this.message = { text: done, good: true };

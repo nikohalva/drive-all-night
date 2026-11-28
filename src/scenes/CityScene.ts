@@ -1,3 +1,4 @@
+import { sound } from '../audio/engine';
 import Phaser from 'phaser';
 import { drawText, textWidth } from '../art/font';
 import { PORTRAIT, portrait } from '../art/portraits';
@@ -205,8 +206,10 @@ export class CityScene extends Phaser.Scene {
     if (result.ok) {
       setState(result.state);
       this.say(done);
+      sound.play('coin');
       return true;
     }
+    sound.play('deny');
     this.say(REASONS[result.reason] ?? 'NOT POSSIBLE', false);
     return false;
   }

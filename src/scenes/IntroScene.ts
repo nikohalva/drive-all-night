@@ -10,7 +10,8 @@ const H = VIEW.H;
 
 /** The opening story. Starts the road ('drive') for a new game, or goes back to the title. */
 export class IntroScene extends Phaser.Scene {
-  private page = 0;
+  /** Read by the music to match the slide on screen. */
+  page = 0;
   private next: 'drive' | 'title' = 'drive';
   private shown: Phaser.GameObjects.Image[] = [];
 
