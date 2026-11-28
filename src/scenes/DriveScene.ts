@@ -49,7 +49,7 @@ import {
   relation,
   statusOf,
 } from '../sim/barons';
-import { groupCap, type PirateGroup as RaidGroup } from '../sim/pirate-fleet';
+import { behindPoint, groupCap, type PirateGroup as RaidGroup } from '../sim/pirate-fleet';
 import { pirateLevel } from '../sim/pirates';
 import {
   baronChancePerSecond,
@@ -376,6 +376,7 @@ export class DriveScene extends Phaser.Scene {
     const helpless = vehicle.hp <= 0;
     if (helpless) this.pirates.clear();
     const groundBlocked = (x: number, y: number): boolean => !isPassable(terrainAt(prev.seed, x, y));
+    const nearCity = cities.some((c) => Math.hypot(c.x - nk.x, c.y - nk.y) <= BALANCE.CITY_SAFE_RADIUS);
     if (!this.frozen) {
       const contact = this.pirates.update(dt, time, { x: nk.x, y: nk.y }, {
         zone,
@@ -384,14 +385,20 @@ export class DriveScene extends Phaser.Scene {
         easy: !prev.flags.easyStartOver,
         graceActive: this.grace.active,
         helpless,
+        heading: nk.heading,
+        nearCity,
       }, groundBlocked);
       if (this.pirates.gaveUp) {
         this.grace.start(8);
         ui.toast = 'THEY GIVE UP THE CHASE';
         ui.toastUntil = time + 3000;
       }
+      if (this.pirates.repelled) {
+        ui.toast = 'THE CITY GUNS DRIVE THEM OFF';
+        ui.toastUntil = time + 3000;
+      }
       if (contact) this.startBattle(contact);
-      else if (!helpless && !this.grace.active) this.rollRaids(dt, zone, stats.strength, vehicle.cargo, !prev.flags.easyStartOver);
+      else if (!helpless && !nearCity && !this.grace.active) this.rollRaids(dt, zone, stats.strength, vehicle.cargo, !prev.flags.easyStartOver);
     }
 
     this.draw(time, dt, tNew, vehicle, zone, cities);
@@ -502,10 +509,8 @@ export class DriveScene extends Phaser.Scene {
     if (!group) return;
     // ground raiders need open ground to start from
     for (let attempt = 0; attempt < 8; attempt++) {
-      const a = this.raidRng() * Math.PI * 2;
-      // far enough out that they drive in from beyond the screen edge
-      const x = p.x + Math.cos(a) * 420;
-      const y = p.y + Math.sin(a) * 420;
+      // behind you, far enough out that they drive in from beyond the screen edge
+      const { x, y } = behindPoint(p, p.heading, 420, this.raidRng);
       if (isPassable(terrainAt(s.seed, x, y))) {
         this.pirates.add({ ...group, x, y });
         return;

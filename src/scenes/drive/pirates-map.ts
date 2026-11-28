@@ -36,6 +36,8 @@ export class PiratesMap {
   private rollTimer = 0;
   /** Set when a group tired of the chase during the last update. */
   gaveUp = false;
+  /** Set when a city's guns drove raiders off during the last update. */
+  repelled = false;
   private nextId = 1;
 
   constructor(
@@ -98,6 +100,8 @@ export class PiratesMap {
 
     let contact: PirateGroup | null = null;
     this.gaveUp = false;
+    this.repelled = ctx.nearCity && this.entries.length > 0;
+    if (ctx.nearCity) this.clear();
     for (const entry of [...this.entries]) {
       entry.group = { ...entry.group, chased: (entry.group.chased ?? 0) + dt };
       entry.group =

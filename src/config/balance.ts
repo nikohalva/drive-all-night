@@ -35,6 +35,8 @@ export const BALANCE = {
   /** Raiders still this far off after this long give up the chase. */
   CHASE_SECONDS: 12,
   CHASE_CLOSE: 60,
+  /** This close to a city its guns keep every raider away. */
+  CITY_SAFE_RADIUS: 300,
   TURBO_BOOST: 1.6,
   TURBO_SECONDS: 3,
   TURBO_RECHARGE: 20,
