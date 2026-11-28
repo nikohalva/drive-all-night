@@ -13,6 +13,10 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.11.1-alpha (2026-11-28)
+
+- The third story slide says it is your parents who seal you into the pod
+
 ### 0.11.0-alpha (2026-11-28)
 
 - An opening story in six slides for a new game, which can be skipped, and watched again from the title screen
