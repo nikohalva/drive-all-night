@@ -23,10 +23,13 @@ import type { TxResult } from '../sim/economy';
 import { hash2 } from '../sim/rng';
 import { saveGame } from '../sim/save';
 import { nearestCopy } from '../sim/world';
+import { planetTimeLabel } from '../sim/clock';
+import { canRest } from '../sim/shelter';
+import { restFor, restRows } from './rest-rows';
 
 const W = VIEW.W;
 const H = VIEW.H;
-const TABS = ['STANDING', 'TRIBUTE', 'TRADE', 'ALLIANCE', 'SAVE', 'LEAVE'] as const;
+const TABS = ['STANDING', 'TRIBUTE', 'TRADE', 'ALLIANCE', 'REST', 'SAVE', 'LEAVE'] as const;
 type Tab = (typeof TABS)[number];
 const ROW_H = 11;
 const LIST_Y = 56;
@@ -140,6 +143,17 @@ export class BaronScene extends Phaser.Scene {
       case 'ALLIANCE':
         this.apply(swearAlliance(s, id), `YOU ARE NOW SWORN TO THE ${this.mine.clan}`);
         break;
+      case 'REST': {
+        const row = restRows(s, this.mine.y)[this.cursor];
+        if (!canRest(statusOf(relation(s, this.mine)))) {
+          sound.play('deny');
+          this.message = { text: 'THEY WILL NOT HAVE YOU UNDER THEIR ROOF', good: false };
+        } else if (row) {
+          sound.play('find');
+          this.message = { text: restFor(row), good: true };
+        }
+        break;
+      }
       case 'SAVE':
         if (!relation(s, this.mine).allied) this.message = { text: 'ONLY ALLIES MAY REST IN THIS HALL', good: false };
         else if (saveGame(s)) this.message = { text: 'GAME SAVED', good: true };
@@ -229,6 +243,14 @@ export class BaronScene extends Phaser.Scene {
                 detail: status === 'FRIENDLY' ? 'AN OATH-GIFT SEALS IT' : 'THE BARON MUST BE FRIENDLY FIRST (STANDING 40+)',
               },
             ];
+      case 'REST':
+        return restRows(s, this.mine.y).map((row) => ({
+          text: row.text,
+          right: planetTimeLabel(row.seconds),
+          color: PAL.cyanPale,
+          dim: !canRest(status),
+          detail: canRest(status) ? 'MEDICS HEAL AND MECHANICS REPAIR WHILE YOU WAIT' : 'ONLY NEUTRAL, FRIENDLY AND ALLIED CLANS LET YOU STAY',
+        }));
       case 'SAVE':
         return [{ text: 'SAVE GAME', color: r.allied ? PAL.cyan : '#5a4a7a', detail: r.allied ? 'YOUR ALLIES KEEP WATCH' : 'ONLY ALLIES MAY REST HERE' }];
       case 'LEAVE':
@@ -260,7 +282,7 @@ export class BaronScene extends Phaser.Scene {
 
   private redraw(): void {
     const s = getState();
-    const sig = JSON.stringify({ t: this.tab, c: this.cursor, m: this.message, cr: s.credits, x: s.vehicle.cargo, b: s.barons[this.mine.id] });
+    const sig = JSON.stringify({ tt: Math.floor(s.t), t: this.tab, c: this.cursor, m: this.message, cr: s.credits, x: s.vehicle.cargo, b: s.barons[this.mine.id] });
     if (sig === this.lastSig) return;
     this.lastSig = sig;
     const ctx = this.canvas.getContext();

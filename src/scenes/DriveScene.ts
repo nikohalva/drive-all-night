@@ -62,13 +62,15 @@ import {
 import type { Rng } from '../sim/rng';
 import { discoverWrecks, searchWreck, wreckInReach } from '../sim/desert';
 import { DesertLayer } from './drive/desert-layer';
+import { discoverVacant, vacantSites } from '../sim/shelter';
+import { Turbo } from '../sim/turbo';
 import { GroundLayer } from './drive/ground';
 import { Lighting, RIG_SCREEN_X, RIG_SCREEN_Y } from './drive/lighting';
 import { ParticleLayer } from './drive/particles-layer';
 import { PiratesMap } from './drive/pirates-map';
 import { RescueFlow } from './drive/rescue-flow';
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'F' | 'E' | 'H' | 'M' | 'C', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'F' | 'E' | 'H' | 'M' | 'C' | 'X', Phaser.Input.Keyboard.Key>;
 type CitySpot = { id: CityId; x: number; y: number };
 
 /** Pixels of ground travelled per tread animation frame. */
@@ -83,6 +85,10 @@ export class DriveScene extends Phaser.Scene {
   private pirates!: PiratesMap;
   private rescue!: RescueFlow;
   private grace = new Grace();
+  private turbo = new Turbo();
+  private vacantSprites = new Map<string, Phaser.GameObjects.Image>();
+  /** The vacant mine whose entrance the rig is at, if any. */
+  private dockVacant: string | null = null;
   private rig!: Phaser.GameObjects.Image;
   private cities = new Map<CityId, Phaser.GameObjects.Image>();
   /** The city whose dock the rig is beside, if any. */
@@ -153,6 +159,12 @@ export class DriveScene extends Phaser.Scene {
     for (const m of mineSites(s.seed)) {
       this.mineSprites.set(m.id, this.add.image(m.x, m.y, ensureMineTexture(this, true)).setDepth(3));
     }
+    this.vacantSprites = new Map();
+    for (const v of vacantSites(s.seed)) {
+      // no lamps and a dead tint: nobody lives here
+      this.vacantSprites.set(v.id, this.add.image(v.x, v.y, ensureMineTexture(this, false)).setDepth(3).setTint(0x8088a8));
+    }
+    this.turbo = new Turbo();
     this.raidRng = makeRng(randomSeed());
     this.raidTimer = 0;
     this.currentRaid = null;
@@ -189,7 +201,7 @@ export class DriveScene extends Phaser.Scene {
     const kb = this.input.keyboard;
     if (!kb) throw new Error('keyboard input is required');
     this.cursors = kb.createCursorKeys();
-    this.keys = kb.addKeys('W,A,S,D,F,E,H,M,C') as KeyMap;
+    this.keys = kb.addKeys('W,A,S,D,F,E,H,M,C,X') as KeyMap;
 
     hooks.onDestroyed = (reason) => this.handleDestroyed(reason);
     if (!this.scene.isActive('hud')) this.scene.launch('hud');
@@ -219,8 +231,17 @@ export class DriveScene extends Phaser.Scene {
     const throttle = canDrive ? (this.isDown(this.cursors.up, this.keys.W) ? 1 : 0) - (this.isDown(this.cursors.down, this.keys.S) ? 1 : 0) : 0;
     const steer = canDrive ? (this.isDown(this.cursors.right, this.keys.D) ? 1 : 0) - (this.isDown(this.cursors.left, this.keys.A) ? 1 : 0) : 0;
 
+    this.turbo.tick(dt);
+    let turboCost = 0;
+    if (canDrive && Phaser.Input.Keyboard.JustDown(this.keys.X) && this.turbo.fire(prev.vehicle.fuel)) {
+      turboCost = BALANCE.TURBO_FUEL;
+      sound.play('turbo');
+    }
+    ui.turboWait = this.turbo.waiting;
+    const boost = this.turbo.boost;
     if (dt > 0) {
-      this.k = stepDriving(k, { throttle, steer }, dt, { topSpeed: caravan.topSpeed, accel: stats.accel }, env);
+      const limits = { topSpeed: caravan.topSpeed * boost, accel: stats.accel * (boost > 1 ? 2.5 : 1) };
+      this.k = stepDriving(k, { throttle, steer }, dt, limits, env);
       this.odometer += forwardSpeed(this.k) * dt;
     }
     const nk = this.k;
@@ -251,7 +272,7 @@ export class DriveScene extends Phaser.Scene {
       this.escortSpots.set(c.id, { ...spot, ...offsetSpot(spot, offset) });
     });
 
-    let vehicle = prev.vehicle;
+    let vehicle = turboCost > 0 ? { ...prev.vehicle, fuel: prev.vehicle.fuel - turboCost } : prev.vehicle;
     if (dt > 0 && throttle !== 0) vehicle = burnFuel(vehicle, throttle, dt * caravan.fuelFactor, caravan.fuelBurnExtra);
 
     if (!this.frozen && Phaser.Input.Keyboard.JustDown(this.keys.F)) vehicle = transferToTank(vehicle, caravan.tankCap);
@@ -296,6 +317,14 @@ export class DriveScene extends Phaser.Scene {
     }
 
     setState(discoverWrecks(getState(), nk.x, nk.y, caravan.sight));
+    const shafts = discoverVacant(getState(), nk.x, nk.y, caravan.sight);
+    if (shafts.length > 0) {
+      const now = getState();
+      setState({ ...now, known: [...now.known, ...shafts] });
+      ui.toast = 'FOUND A VACANT MINE';
+      ui.toastUntil = time + 4000;
+      sound.play('find');
+    }
     const wreck = wreckInReach(getState(), nk.x, nk.y);
 
     const zone = zoneAt(nk.y, tNew);
@@ -313,13 +342,19 @@ export class DriveScene extends Phaser.Scene {
     this.dockMine = mineOpen ? near.mine.id : null;
     ui.nearMine = mineOpen ? near.mine.baron : null;
     ui.mineSealed = atMine && !mineOpen;
-    ui.nearWreck = !!wreck && !ui.nearDock && !this.dockMine;
+    const shaft = vacantSites(prev.seed).find(
+      (v) => Math.hypot(v.x - nk.x, nearestCopy(v.y + 24, nk.y) - nk.y) <= MINE_ENTRY_RADIUS,
+    );
+    this.dockVacant = shaft && !ui.nearDock && !this.dockMine ? shaft.id : null;
+    ui.nearVacant = !!this.dockVacant;
+    ui.nearWreck = !!wreck && !ui.nearDock && !this.dockMine && !this.dockVacant;
     if (zone === 'scorch' && !this.frozen) sound.play('alarm', 1.6);
     if (zone === 'dawn' && !this.frozen) this.handleDestroyed('dawn');
 
     const dockPressed = Phaser.Input.Keyboard.JustDown(this.keys.E);
     if (dockPressed && ui.nearDock && !this.frozen && !this.destroyedPending) this.enterCity();
     else if (dockPressed && this.dockMine && !this.frozen && !this.destroyedPending) this.enterMine();
+    else if (dockPressed && this.dockVacant && !this.frozen && !this.destroyedPending) this.enterVacant();
     else if (dockPressed && wreck && !this.frozen && !this.destroyedPending) {
       const found = searchWreck(getState(), wreck.id);
       setState(found.state);
@@ -350,6 +385,11 @@ export class DriveScene extends Phaser.Scene {
         graceActive: this.grace.active,
         helpless,
       }, groundBlocked);
+      if (this.pirates.gaveUp) {
+        this.grace.start(8);
+        ui.toast = 'THEY GIVE UP THE CHASE';
+        ui.toastUntil = time + 3000;
+      }
       if (contact) this.startBattle(contact);
       else if (!helpless && !this.grace.active) this.rollRaids(dt, zone, stats.strength, vehicle.cargo, !prev.flags.easyStartOver);
     }
@@ -491,6 +531,10 @@ export class DriveScene extends Phaser.Scene {
   /** Mines stay put while the night moves: draw the ones near the rig, lit while open. */
   private drawMines(t: number): void {
     const s = getState();
+    for (const v of vacantSites(s.seed)) {
+      const y = nearestCopy(v.y, s.player.y);
+      this.vacantSprites.get(v.id)?.setPosition(v.x, y).setVisible(Math.abs(y - s.player.y) < 1200);
+    }
     for (const m of mineSites(s.seed)) {
       const img = this.mineSprites.get(m.id);
       if (!img) continue;
@@ -508,6 +552,15 @@ export class DriveScene extends Phaser.Scene {
     this.k = { ...this.k, vx: 0, vy: 0 };
     this.pirates.clear();
     this.scene.launch('baron', { mineId: this.dockMine });
+  }
+
+  /** Down into an abandoned mine; the clock only moves if you choose to wait. */
+  private enterVacant(): void {
+    sound.play('dock');
+    this.frozen = true;
+    this.k = { ...this.k, vx: 0, vy: 0 };
+    this.pirates.clear();
+    this.scene.launch('shelter', { vacantId: this.dockVacant });
   }
 
   /** Dock with the city: freeze the world and open the city menu (which autosaves). */

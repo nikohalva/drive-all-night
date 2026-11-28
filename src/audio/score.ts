@@ -77,7 +77,7 @@ export function notesAt(mood: Mood, step: number): Note[] {
 /** Which music fits the screens that are up (listed bottom first); null leaves it silent. */
 export function moodFor(scenes: readonly string[], slide?: string): Mood | null {
   if (scenes.includes('battle')) return 'battle';
-  if (scenes.some((s) => s === 'city' || s === 'arrival' || s === 'baron' || s === 'victory')) return 'city';
+  if (scenes.some((s) => s === 'city' || s === 'arrival' || s === 'baron' || s === 'shelter' || s === 'victory')) return 'city';
   if (scenes.includes('intro')) return slide === 'shadow' || slide === 'pod' ? 'danger' : 'story';
   if (scenes.includes('drive')) return 'drive';
   return scenes.includes('title') ? 'title' : null;

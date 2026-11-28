@@ -33,6 +33,7 @@ export const SFX = {
   sparkle: [v('sine', 1760, 2637, 0, 0.09, 0.05)],
   find: [v('triangle', 660, 660, 0, 0.1, 0.2), v('triangle', 990, 990, 0.1, 0.25, 0.2)],
   alarm: [v('square', 740, 740, 0, 0.14, 0.14), v('square', 554, 554, 0.18, 0.14, 0.14)],
+  turbo: [v('sawtooth', 90, 500, 0, 0.6, 0.25), v('noise', 500, 3000, 0, 0.5, 0.2)],
   dock: [v('sine', 220, 440, 0, 0.35, 0.22), v('noise', 600, 200, 0.2, 0.3, 0.15)],
 } satisfies Record<string, Voice[]>;
 

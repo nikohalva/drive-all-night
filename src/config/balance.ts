@@ -32,6 +32,13 @@ export const BALANCE = {
   RESCUE_FUEL: 15,
   /** Longest a vehicle stranded on the scorched side survives while waiting for help. */
   SCORCH_SURVIVE_SECONDS: 20,
+  /** Raiders still this far off after this long give up the chase. */
+  CHASE_SECONDS: 12,
+  CHASE_CLOSE: 60,
+  TURBO_BOOST: 1.6,
+  TURBO_SECONDS: 3,
+  TURBO_RECHARGE: 20,
+  TURBO_FUEL: 3,
 } as const;
 
 /** Night is half of the planet's circumference. */

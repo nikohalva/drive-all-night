@@ -65,7 +65,7 @@ const sites = new Map<number, Mine[]>();
 export const ENTRANCE_DY = 24;
 
 /** A spot next to the entrance with open ground all round it, inside the entry radius. */
-function exitNear(seed: number, ex: number, ey: number): { x: number; y: number } | null {
+export function exitNear(seed: number, ex: number, ey: number): { x: number; y: number } | null {
   for (const [dx, dy] of [[36, 0], [-36, 0], [0, 36], [26, 26], [-26, 26], [20, 0], [-20, 0], [0, 20]]) {
     const x = ex + dx;
     const y = ey + dy;
@@ -75,7 +75,7 @@ function exitNear(seed: number, ex: number, ey: number): { x: number; y: number 
   return null;
 }
 
-function openGround(seed: number, x: number, y: number): boolean {
+export function openGround(seed: number, x: number, y: number): boolean {
   for (const [dx, dy] of [
     [0, 0], [40, 0], [-40, 0], [0, 40], [0, -40], [28, 28], [-28, 28], [28, -28], [-28, -28],
   ]) {

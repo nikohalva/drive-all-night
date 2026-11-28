@@ -34,6 +34,8 @@ const factionOf = (g: PirateGroup): Faction => g.faction ?? 'pirates';
 export class PiratesMap {
   private entries: Entry[] = [];
   private rollTimer = 0;
+  /** Set when a group tired of the chase during the last update. */
+  gaveUp = false;
   private nextId = 1;
 
   constructor(
@@ -95,12 +97,15 @@ export class PiratesMap {
     }
 
     let contact: PirateGroup | null = null;
+    this.gaveUp = false;
     for (const entry of [...this.entries]) {
+      entry.group = { ...entry.group, chased: (entry.group.chased ?? 0) + dt };
       entry.group =
         factionOf(entry.group) === 'pirates'
           ? stepGroup(entry.group, player, dt)
           : stepGroundGroup(entry.group, player, dt, blocked);
       if (shouldGiveUp(entry.group, player)) {
+        this.gaveUp = true;
         this.remove(entry);
       } else if (!contact && inContact(entry.group, player)) {
         contact = entry.group;
