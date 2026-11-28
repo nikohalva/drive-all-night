@@ -13,6 +13,10 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.11.0-alpha (2026-11-28)
+
+- An opening story in six slides for a new game, which can be skipped, and watched again from the title screen
+
 ### 0.10.1-alpha (2026-11-28)
 
 - Fix: caravan vehicles no longer ride underneath a big rig or an old rig; the column spaces itself by vehicle length

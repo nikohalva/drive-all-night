@@ -15,7 +15,7 @@ const H = VIEW.H;
 const S = H / 270;
 const hex = (c: string): number => parseInt(c.slice(1), 16);
 
-/** Title screen: CONTINUE (only with a usable save) and NEW GAME. */
+/** Title screen: CONTINUE (only with a usable save), NEW GAME and STORY. */
 export class TitleScene extends Phaser.Scene {
   private items: { label: string; run: () => void }[] = [];
   private choice = 0;
@@ -65,9 +65,11 @@ export class TitleScene extends Phaser.Scene {
         setState(fresh);
         resetDepletion();
         saveGame(fresh);
-        this.scene.start('drive');
+        this.scene.start('intro', { next: 'drive' });
       },
     });
+    // watch the opening again without touching the save
+    this.items.push({ label: 'STORY', run: () => this.scene.start('intro', { next: 'title' }) });
     this.choice = 0;
 
     this.add.image(W - 6, 6, ensureLabel(this, VERSION_LABEL, '#c8b8e8')).setOrigin(1, 0).setDepth(10);

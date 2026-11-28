@@ -1,6 +1,10 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.10.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.11.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+
+## Opening story
+
+A new game starts with six story slides: Enter for the next, Left to go back, Esc to skip. **STORY** on the title screen shows them again without touching your save. They are a stand-in until chapter 1 exists.
 
 ## Controls
 
