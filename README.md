@@ -13,6 +13,10 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.14.0-alpha (2026-11-28)
+
+- City shuttle: pay to have your whole caravan carried to another city, with no raiders
+
 ### 0.13.1-alpha (2026-11-28)
 
 - Fix: raiders appear behind you, never in your path
