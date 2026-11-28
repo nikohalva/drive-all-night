@@ -14,6 +14,8 @@ export interface PirateGroup {
   faction?: Faction;
   /** For baron war parties: the mine they come from. */
   mineId?: string;
+  /** Seconds this group has been after you. */
+  chased?: number;
 }
 
 export interface FleetContext {
@@ -77,8 +79,10 @@ export function stepGroup(g: PirateGroup, target: { x: number; y: number }, dt: 
 export const inContact = (g: PirateGroup, target: { x: number; y: number }): boolean =>
   distance(g, target) <= BALANCE.CONTACT_RADIUS;
 
-export const shouldGiveUp = (g: PirateGroup, target: { x: number; y: number }): boolean =>
-  distance(g, target) > GIVE_UP_DISTANCE;
+export const shouldGiveUp = (g: PirateGroup, target: { x: number; y: number }): boolean => {
+  const d = distance(g, target);
+  return d > GIVE_UP_DISTANCE || ((g.chased ?? 0) >= BALANCE.CHASE_SECONDS && d > BALANCE.CHASE_CLOSE);
+};
 
 export const isWarning = (g: PirateGroup, target: { x: number; y: number }): boolean =>
   distance(g, target) < WARN_DISTANCE;

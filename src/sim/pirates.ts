@@ -70,8 +70,8 @@ export class Grace {
 
   constructor(private readonly seconds: number = BALANCE.GRACE_SECONDS) {}
 
-  start(): void {
-    this.remaining = this.seconds;
+  start(seconds = this.seconds): void {
+    this.remaining = seconds;
   }
 
   tick(dt: number): void {

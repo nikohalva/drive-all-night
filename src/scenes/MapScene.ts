@@ -6,6 +6,7 @@ import { CITIES, CITY_BY_ID } from '../config/cities';
 import { VIEW } from '../config/view';
 import { getState } from '../game/session';
 import { allWrecks } from '../sim/desert';
+import { vacantSites } from '../sim/shelter';
 import { STANDING_COLOR, mineSites, relation, statusOf } from '../sim/barons';
 import { planetTimeLabel } from '../sim/clock';
 import { mapWindow, placeLabel, toMap, type MapArea, type MapWindow, type MapZoom } from '../sim/map';
@@ -74,7 +75,10 @@ export class MapScene extends Phaser.Scene {
         color: STANDING_COLOR[statusOf(relation(s, m))],
         shape: 'mine' as const,
       }));
-    return [...cities, ...mines];
+    const vacant = vacantSites(s.seed)
+      .filter((v) => s.known.includes(v.id))
+      .map((v) => ({ name: 'VACANT', x: v.x, y: v.y, color: '#c8b8e8', shape: 'mine' as const }));
+    return [...cities, ...mines, ...vacant];
   }
 
   private render(): void {

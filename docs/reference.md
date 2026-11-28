@@ -1,6 +1,6 @@
 # Drive All Night: game reference
 
-Components, upgrades and rules as of **0.12.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
+Components, upgrades and rules as of **0.13.0-alpha**. The numbers live in `src/config/` and `src/sim/`; if they differ from this file, the code is right. Update this file when they change.
 
 ## Opening story
 
@@ -14,6 +14,7 @@ A new game starts with six story slides: Enter for the next, Left to go back, Es
 | F | move cargo into the fuel tank |
 | E | dock at a city, enter a mine or search a wreck |
 | H | call for help when broken down |
+| X | turbo boost |
 | M | world map (Z zooms) |
 | C | crew |
 | N | sound: all, effects only, off |
@@ -277,6 +278,20 @@ Twelve mines, open only at night. A baron's temper sets the starting standing an
 - **Tribute:** 10 Particle X for +4, or 200 credits for +5.
 - **Alliance:** 500 credits when friendly. Allied riders may join battles near their mine.
 - **Trade:** closed to hostile and wary relations; prices fall as standing rises, and allies pay 20% less.
+
+## Shelter
+
+- **Where:** a baron's hall on the **REST** tab (neutral, friendly or allied only; the mine must be open), or a **vacant mine**, which is open at all times. Ten vacant mines are marked on the map once seen.
+- **Waiting:** pick a city. Time passes until it draws level with the mine; it may still be some way off to the side.
+- **Healing:** wounds close, faster with a fit medic.
+- **Repairs:** a fit mechanic of Able skill or better repairs every vehicle, wrecks included. A green hand cannot.
+- No wages build up while sheltering. You can save in a vacant mine.
+
+## Escaping
+
+- Raiders on the road give up after 12 seconds unless they are within a few lengths of you, or at once if you get far enough ahead.
+- **Turbo (X):** 60% more top speed for 3 seconds, for 3 fuel. Ready again 20 seconds after you lit it.
+- **Flee** in battle: your rig's order, 10-90% chance, better with speed and scouts.
 
 ## Enemies and rescue
 

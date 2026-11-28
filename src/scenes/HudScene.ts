@@ -43,6 +43,8 @@ interface HudData {
   nearMine: string | null;
   mineSealed: boolean;
   nearWreck: boolean;
+  nearVacant: boolean;
+  turboWait: number;
   toast: string | null;
 }
 
@@ -109,6 +111,8 @@ export class HudScene extends Phaser.Scene {
       nearMine: ui.nearMine,
       mineSealed: ui.mineSealed,
       nearWreck: ui.nearWreck,
+      nearVacant: ui.nearVacant,
+      turboWait: Math.ceil(ui.turboWait),
       toast: ui.toast && time < ui.toastUntil ? ui.toast : null,
     };
   }
@@ -159,6 +163,7 @@ export class HudScene extends Phaser.Scene {
     if (d.down > 0) info(`${d.down} DOWN`, PAL.red);
     if (d.hurt > 0) info(`${d.hurt} HURT`, PAL.amber);
     info('C CREW', '#7a6a9a');
+    info(d.turboWait > 0 ? `TURBO ${d.turboWait}S` : 'X TURBO', d.turboWait > 0 ? '#5a4a7a' : PAL.cyanPale);
 
     // strip map: dawn on the left, sunset on the right
     for (let i = 0; i < MAP_W; i++) {
@@ -198,6 +203,7 @@ export class HudScene extends Phaser.Scene {
     if (d.nearDock) prompts.push(`E: DOCK AT ${d.dockName ?? 'CITY'}`);
     if (d.nearMine) prompts.push(`E: ENTER THE MINE OF ${d.nearMine}`);
     if (d.mineSealed) prompts.push('THE MINE IS SEALED UNTIL NIGHT');
+    if (d.nearVacant) prompts.push('E: SHELTER IN THE VACANT MINE');
     if (d.nearWreck) prompts.push('E: SEARCH THE WRECK');
     if (d.fuelHint) prompts.push('F: FUEL FROM CARGO');
     prompts.forEach((p, i) => this.centered(ctx, p, H - 44 - i * 9, d.broken && i === 0 ? PAL.red : PAL.amber));

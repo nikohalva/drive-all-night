@@ -15,6 +15,7 @@ import { GalleryScene } from './scenes/GalleryScene';
 import { HudScene } from './scenes/HudScene';
 import { IntroScene } from './scenes/IntroScene';
 import { MapScene } from './scenes/MapScene';
+import { ShelterScene } from './scenes/ShelterScene';
 import { TitleScene } from './scenes/TitleScene';
 import { VictoryScene } from './scenes/VictoryScene';
 
@@ -30,10 +31,10 @@ const game = new Phaser.Game({
   roundPixels: true,
   backgroundColor: '#07020f',
   scale: { mode: Phaser.Scale.NONE, zoom: 1 },
-  scene: [BootScene, TitleScene, IntroScene, GalleryScene, DriveScene, HudScene, BattleScene, CityScene, VictoryScene, MapScene, BaronScene, ArrivalScene, CrewScene],
+  scene: [BootScene, TitleScene, IntroScene, GalleryScene, DriveScene, HudScene, BattleScene, CityScene, VictoryScene, MapScene, BaronScene, ShelterScene, ArrivalScene, CrewScene],
 });
 
-const MENUS = ['title', 'intro', 'city', 'arrival', 'crew', 'map', 'baron', 'battle'];
+const MENUS = ['title', 'intro', 'city', 'arrival', 'crew', 'map', 'baron', 'shelter', 'battle'];
 const SOUND_LABEL = { all: 'SOUND ON', effects: 'MUSIC OFF', off: 'SOUND OFF' } as const;
 
 const activeScenes = (): string[] => game.scene.getScenes(true).map((s) => s.scene.key);

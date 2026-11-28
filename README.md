@@ -13,6 +13,12 @@ Components, upgrades and rules: [game reference](docs/reference.md).
 Newest first. The version number lives in `package.json` and is shown on the title screen.
 A new feature raises the middle number, a fix or small addition the last one.
 
+### 0.13.0-alpha (2026-11-28)
+
+- Shelter in neutral, friendly and allied mines, or in vacant mines, and wait for a city to roll by
+- While you wait, medics heal and mechanics repair
+- Raiders give up a long chase, and X gives a turbo boost
+
 ### 0.12.0-alpha (2026-11-28)
 
 - Ambient synth music that changes with the title, story, road, cities and battles
